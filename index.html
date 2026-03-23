@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Poker Texas Hold'em — Guía de Estudio</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Space+Mono:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="poker-guide.css">
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="suits-row">
+    <span class="suit">♠</span>
+    <span class="suit">♥</span>
+    <span class="suit">♣</span>
+    <span class="suit">♦</span>
+  </div>
+  <h1>Texas Hold'em</h1>
+  <p>Guía de Estudio Avanzada · MTT &amp; Cash Game</p>
+</header>
+
+<!-- PROGRESS -->
+<div class="progress-bar-wrap">
+  <span>PROGRESO GLOBAL</span>
+  <div class="progress-track">
+    <div class="progress-fill" id="global-fill"></div>
+  </div>
+  <span class="progress-pct" id="global-pct">0%</span>
+</div>
+
+<!-- NAV TABS -->
+<nav>
+  <div class="nav-tab active"  data-section="fundamentos" onclick="showSection('fundamentos')"><span class="tab-dot"></span> Fundamentos</div>
+  <div class="nav-tab"         data-section="preflop"     onclick="showSection('preflop')"><span class="tab-dot"></span> Preflop</div>
+  <div class="nav-tab"         data-section="flop"        onclick="showSection('flop')"><span class="tab-dot"></span> Flop</div>
+  <div class="nav-tab"         data-section="turn"        onclick="showSection('turn')"><span class="tab-dot"></span> Turn</div>
+  <div class="nav-tab"         data-section="river"       onclick="showSection('river')"><span class="tab-dot"></span> River</div>
+  <div class="nav-tab"         data-section="spots"       onclick="showSection('spots')"><span class="tab-dot"></span> Spots Clave</div>
+  <div class="nav-tab"         data-section="torneos"     onclick="showSection('torneos')"><span class="tab-dot"></span> MTT / Torneos</div>
+  <div class="nav-tab"         data-section="icm"         onclick="showSection('icm')"><span class="tab-dot"></span> ICM Avanzado</div>
+  <div class="nav-tab"         data-section="estudio"     onclick="showSection('estudio')"><span class="tab-dot"></span> Plan de Estudio</div>
+  <div class="nav-tab"         data-section="reglas"      onclick="showSection('reglas')"><span class="tab-dot"></span> Reglas de Oro</div>
+</nav>
+
+<main>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <p class="sidebar-label">Secciones</p>
+    <ul class="sidebar-menu">
+      <li class="sidebar-item active" data-section="fundamentos" onclick="showSection('fundamentos')">♠ Fundamentos <span class="sidebar-progress" id="sp-fundamentos"></span></li>
+      <li class="sidebar-item"        data-section="preflop"     onclick="showSection('preflop')">♥ Preflop <span class="sidebar-progress" id="sp-preflop"></span></li>
+      <li class="sidebar-item"        data-section="flop"        onclick="showSection('flop')">♣ Flop <span class="sidebar-progress" id="sp-flop"></span></li>
+      <li class="sidebar-item"        data-section="turn"        onclick="showSection('turn')">♦ Turn <span class="sidebar-progress" id="sp-turn"></span></li>
+      <li class="sidebar-item"        data-section="river"       onclick="showSection('river')">♠ River <span class="sidebar-progress" id="sp-river"></span></li>
+      <li class="sidebar-item"        data-section="spots"       onclick="showSection('spots')">♥ Spots Clave <span class="sidebar-progress" id="sp-spots"></span></li>
+      <li class="sidebar-item"        data-section="torneos"     onclick="showSection('torneos')">♣ MTT <span class="sidebar-progress" id="sp-torneos"></span></li>
+      <li class="sidebar-item"        data-section="icm"         onclick="showSection('icm')">♦ ICM <span class="sidebar-progress" id="sp-icm"></span></li>
+      <li class="sidebar-item"        data-section="estudio"     onclick="showSection('estudio')">♠ Plan <span class="sidebar-progress" id="sp-estudio"></span></li>
+      <li class="sidebar-item"        data-section="reglas"      onclick="showSection('reglas')">♥ Reglas <span class="sidebar-progress" id="sp-reglas"></span></li>
+    </ul>
+  </aside>
+
+  <!-- CONTENT -->
+  <div class="content">
+
+    <!-- ========== FUNDAMENTOS ========== -->
+    <section class="section active" id="section-fundamentos">
+      <div class="section-title">♠ Fundamentos Generales</div>
+      <p class="section-subtitle">Los pilares conceptuales del póker moderno</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><span class="icon" style="background:rgba(201,168,76,0.15)">📐</span> Matemáticas Básicas</div>
+          <ul class="concept-list" id="list-fund-mat">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Equity — % de veces que ganas el bote</span><span class="concept-tag">core</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">EV (Expected Value) — valor esperado de una acción</span><span class="concept-tag">core</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Pot Odds — ratio bote vs apuesta para hacer un call</span><span class="concept-tag">core</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Implied Odds — potencial ganancia futura si llegas</span><span class="concept-tag">avanzado</span></li>
+          </ul>
+          <div class="tip">
+            <strong>Ejemplo Pot Odds:</strong> Bote = 100€, rival apuesta 50€ → debes pagar 50 para ganar 150. Necesitas ≥ 33% equity para hacer el call.
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><span class="icon" style="background:rgba(41,128,185,0.15)">🎯</span> Rangos y Ventajas</div>
+          <ul class="concept-list" id="list-fund-rangos">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Rangos vs manos concretas — pensar en conjuntos</span><span class="concept-tag">core</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Ventaja de rango (range advantage)</span><span class="concept-tag">avanzado</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Ventaja de nuts — tener las mejores manos posibles</span><span class="concept-tag">avanzado</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Posición IP (In Position) vs OOP (Out Of Position)</span><span class="concept-tag">core</span></li>
+          </ul>
+          <div class="tip">
+            <strong>Regla clave:</strong> La posición es la ventaja más constante en póker. Jugar IP te permite actuar con más información.
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title"><span class="icon" style="background:rgba(39,174,96,0.15)">⚖️</span> Estrategia: GTO vs Exploitative</div>
+        <ul class="concept-list" id="list-fund-gto">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">GTO (Game Theory Optimal) — estrategia no explotable</span><span class="concept-tag">avanzado</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Exploitative — ajustar al estilo del rival para maximizar EV</span><span class="concept-tag">avanzado</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Balance entre GTO y exploitative según el rival</span><span class="concept-tag">avanzado</span></li>
+        </ul>
+        <hr class="divider">
+        <div class="grid-2">
+          <div>
+            <p style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:0.5rem">GTO</p>
+            <p style="font-size:0.84rem;line-height:1.6;color:#c8c8dc">Juegas una estrategia mixta que hace indiferente al rival. Ideal vs buenos jugadores.</p>
+          </div>
+          <div>
+            <p style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--muted);margin-bottom:0.5rem">EXPLOITATIVE</p>
+            <p style="font-size:0.84rem;line-height:1.6;color:#c8c8dc">Explotas errores específicos del rival. Máximo EV vs malos jugadores.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== PREFLOP ========== -->
+    <section class="section" id="section-preflop">
+      <div class="section-title">♥ Preflop</div>
+      <p class="section-subtitle">Rangos, sizings y construcción de tu estrategia antes del flop</p>
+
+      <div class="card">
+        <div class="card-title"><span class="icon" style="background:rgba(201,168,76,0.15)">🃏</span> Rangos Preflop por Posición</div>
+        <div class="range-grid" id="range-grid"></div>
+        <div class="range-legend">
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(201,168,76,0.7)"></div>Premium (AA, KK, QQ, AKs)</div>
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(41,128,185,0.6)"></div>Broadway (AQ, KQ, JJ, TT…)</div>
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(39,174,96,0.6)"></div>Especulativas (suited connectors)</div>
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(155,89,182,0.6)"></div>Suited Aces</div>
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(230,126,34,0.4)"></div>Marginales</div>
+          <div class="range-legend-item"><div class="range-legend-dot" style="background:rgba(255,255,255,0.06)"></div>Fold</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Tipos de Manos</div>
+          <ul class="concept-list" id="list-pre-manos">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Premium: AA, KK, QQ, JJ, AKs — siempre abrir/reraise</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Broadways: AQ, KQ, QJ, KJs — valor en posición</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Suited connectors: 87s, 76s — implied odds</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Small pairs: 22-55 — set mining</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Acciones y Sizings</div>
+          <ul class="concept-list" id="list-pre-sizings">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Open raise: 2.5x BB estándar (3x OOP)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">3-bet: 3x el open (IP) / 4x (OOP)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">4-bet: ~2.5x el 3-bet (o shove)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Defensa de ciegas: BB defiende más ancho que SB</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">SPR — Stack to Pot Ratio</div>
+        <table class="poker-table">
+          <thead>
+            <tr><th>SPR</th><th>Situación</th><th>Implicación</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><span class="badge badge-red">&lt; 2</span></td><td>Stack muy corto</td><td>Ir all-in con top pair o mejor</td></tr>
+            <tr><td><span class="badge badge-gold">2 – 6</span></td><td>Stack medio</td><td>Comprometerse con good top pair+</td></tr>
+            <tr><td><span class="badge badge-green">&gt; 6</span></td><td>Stack profundo</td><td>Necesitas sets, two pair o mejor para poner todo</td></tr>
+          </tbody>
+        </table>
+        <ul class="concept-list" id="list-pre-spr" style="margin-top:0.8rem">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">SPR bajo → manos de valor más simples son suficientes</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">SPR alto → implied odds y manos especulativas ganan valor</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ========== FLOP ========== -->
+    <section class="section" id="section-flop">
+      <div class="section-title">♣ Flop</div>
+      <p class="section-subtitle">Tipos de board, c-bet y construcción de rangos en el flop</p>
+
+      <div class="card">
+        <div class="card-title">Tipos de Board</div>
+        <div class="grid-3">
+          <div style="text-align:center;padding:0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:1.6rem;margin-bottom:0.4rem">🏜️</div>
+            <p style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--accent);margin-bottom:0.3rem">DRY</p>
+            <p style="font-size:0.78rem;color:var(--muted);line-height:1.4">K♠ 7♣ 2♥<br>Pocos draws<br>C-bet grande</p>
+          </div>
+          <div style="text-align:center;padding:0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:1.6rem;margin-bottom:0.4rem">🌊</div>
+            <p style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--blue-soft);margin-bottom:0.3rem">WET</p>
+            <p style="font-size:0.78rem;color:var(--muted);line-height:1.4">9♥ 8♥ 6♣<br>Muchos draws<br>C-bet pequeña o check</p>
+          </div>
+          <div style="text-align:center;padding:0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:8px">
+            <div style="font-size:1.6rem;margin-bottom:0.4rem">🌑</div>
+            <p style="font-family:'Space Mono',monospace;font-size:0.68rem;color:var(--red-soft);margin-bottom:0.3rem">MONOTONE</p>
+            <p style="font-size:0.78rem;color:var(--muted);line-height:1.4">A♠ T♠ 5♠<br>Flush draw visible<br>Mucho cuidado</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Continuation Bet (C-bet)</div>
+          <ul class="concept-list" id="list-flop-cbet">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">C-bet small (25-33%): boards wet, multiway</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">C-bet medium (50-66%): boards mixtos, heads-up</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">C-bet large (75-100%): boards secos, polarized</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Check con rango: no c-bet el 100% del rango</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Overbet en boards que favorecen tu rango</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Tipos de Mano en Flop</div>
+          <ul class="concept-list" id="list-flop-manos">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Top Pair Top Kicker — valor fuerte, bet</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Sets (trío oculto) — slowplay o fast-play</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Flush draw — semi-bluff, equity</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">OESD (open-ended straight draw) — 8 outs</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Gutshot — 4 outs, necesita implied odds</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Objetivos en el Flop</div>
+        <ul class="concept-list" id="list-flop-obj">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Valor: cobrar a manos inferiores que pagan</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Bluff: hacer foldar manos con equity (protección)</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Protección: evitar que draws rivales lleguen gratis</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Control: manejar el tamaño del bote con manos medias</span></li>
+        </ul>
+        <div class="warn"><strong>Atención:</strong> Apostar siempre puede ser explotable. Check-raise y trap son armas válidas con manos muy fuertes.</div>
+      </div>
+    </section>
+
+    <!-- ========== TURN ========== -->
+    <section class="section" id="section-turn">
+      <div class="section-title">♦ Turn</div>
+      <p class="section-subtitle">Segunda calle — presión, polarización y control del bote</p>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Cartas del Turn</div>
+          <ul class="concept-list" id="list-turn-cartas">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Scare cards — cartas que cambian el equity</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Blanks — cartas que no cambian rangos</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Completions de flush/straight — decisiones críticas</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Estrategia Turn</div>
+          <ul class="concept-list" id="list-turn-strat">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Second barrel: continuar el bluff del flop en turn</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Delayed c-bet: check flop, apuesta turn (deceptivo)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Polarización de rangos: valor alto vs bluff, sin medias</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Control del bote con manos medias (check/call)</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Polarización — Concepto Clave</div>
+        <p style="font-size:0.88rem;line-height:1.7;color:#c8c8dc;margin-bottom:0.8rem">
+          Un rango polarizado contiene manos muy fuertes (valor) y manos muy débiles (bluffs), pero muy pocas intermedias. Esto maximiza la presión sobre el rival.
+        </p>
+        <table class="poker-table">
+          <thead>
+            <tr><th>Tipo</th><th>Tamaño apuesta</th><th>Por qué</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Polarizado</td><td>75-150% del bote</td><td>Máxima presión, no le da odds a draws</td></tr>
+            <tr><td>Depolarizado (merged)</td><td>25-50% del bote</td><td>Cobrar con manos medias-fuertes</td></tr>
+            <tr><td>Control</td><td>Check</td><td>Proteger rango débil, pot control</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== RIVER ========== -->
+    <section class="section" id="section-river">
+      <div class="section-title">♠ River</div>
+      <p class="section-subtitle">Decisión final — valor, bluff y blockers</p>
+
+      <div class="card">
+        <div class="card-title">Polarización Total en River</div>
+        <p style="font-size:0.88rem;line-height:1.7;color:#c8c8dc">
+          En river no hay draws — tu rango debe estar completamente polarizado. O apuestas para valor o apuestas como bluff. Las manos medias que no pueden mejorar se convierten en check.
+        </p>
+        <div class="tip"><strong>Regla GTO:</strong> La ratio bluff:valor debe ser tal que el rival esté indiferente entre call y fold. Aprox. 1 bluff por cada 2 value bets con apuestas medianas.</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Value vs Bluff</div>
+          <ul class="concept-list" id="list-river-vb">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Value bet: apostar para cobrar a manos peores que te llaman</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Bluff: apostar para hacer foldar manos mejores</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Thin value: apostar con manos borderline (arriesgado)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Overbet: apostar &gt;100% bote para máxima presión</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Bluff Catching &amp; Blockers</div>
+          <ul class="concept-list" id="list-river-bl">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Bluff catch: call con manos medias vs posible bluff</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Blockers: tener cartas que reducen combos del rival</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Blocker al nuts: bluffear cuando tienes su carta clave</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">All-in polarizado: máxima presión, sin medias tintas</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Ejemplo de Blockers</div>
+        <table class="poker-table">
+          <thead><tr><th>Board</th><th>Tu mano</th><th>Efecto blocker</th></tr></thead>
+          <tbody>
+            <tr><td>A♠ K♠ Q♠ J♥ 2♠</td><td>T♠ cualquier</td><td>Bloqueas la royal flush del rival, puedes bluffear más</td></tr>
+            <tr><td>A♥ 8♥ 3♥ K♦ 7♥</td><td>A♥ x</td><td>Bloqueas nuts flush del rival → buen bluff catch spot</td></tr>
+            <tr><td>5♣ 6♣ 7♦ 8♥ Q♣</td><td>9♣ x</td><td>Tienes straight + blocker al flush → valor puro</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ========== SPOTS CLAVE ========== -->
+    <section class="section" id="section-spots">
+      <div class="section-title">♥ Spots Clave</div>
+      <p class="section-subtitle">Situaciones de alta frecuencia que debes dominar</p>
+
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAcc(this)">BTN vs BB — El spot más jugado <span class="accordion-arrow">▼</span></div>
+        <div class="accordion-body">
+          <p style="margin-bottom:0.8rem">El BTN es la posición más ventajosa y juega muy frecuentemente contra el BB. El BTN tiene ventaja de rango (abre muy ancho) y ventaja posicional (siempre IP postflop).</p>
+          <ul class="concept-list" id="list-spots-btnbb">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">BTN debe abrir muy amplio (40-50% de manos)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">BB debe defender amplio para no ser explotado</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">3-bet del BB: linear con premiums, polar con bluffs</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAcc(this)">Blind vs Blind — El spot OOP vs OOP <span class="accordion-arrow">▼</span></div>
+        <div class="accordion-body">
+          <p style="margin-bottom:0.8rem">SB vs BB es único: ambos están OOP en relación al resto, pero SB actúa primero postflop. Esto hace el spot muy específico.</p>
+          <ul class="concept-list" id="list-spots-bvb">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">SB debe completar amplio o raise (raramente fold)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">BB puede 3-bet agresivo, SB no tiene ventaja posicional</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Postflop: SB como OOP debe check más frecuente</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAcc(this)">3-bet Pots — Jugando con rango polarizado <span class="accordion-arrow">▼</span></div>
+        <div class="accordion-body">
+          <p style="margin-bottom:0.8rem">Los 3-bet pots tienen un bote más grande preflop → SPR más bajo postflop → decisiones más comprometidas.</p>
+          <ul class="concept-list" id="list-spots-3bet">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">SPR bajo → top pair suele ser suficiente para stack off</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">El 3-bettor tiene ventaja de rango en muchos boards altos</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Boards bajos (2-5-8) favorecen al caller (manos especulativas)</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAcc(this)">4-bet Pots — Alta tensión preflop <span class="accordion-arrow">▼</span></div>
+        <div class="accordion-body">
+          <p style="margin-bottom:0.8rem">Los rangos en 4-bet pots son muy reducidos. Ambos jugadores muestran mucha fuerza.</p>
+          <ul class="concept-list" id="list-spots-4bet">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">4-bet call: solo con AA, KK (a veces QQ, AKs)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">4-bet bluff: manos con blockers (Ax, Kx suited)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Postflop: suele ser SPR &lt; 1 → push/fold territory</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="accordion">
+        <div class="accordion-header" onclick="toggleAcc(this)">Multiway Pots — Complejidad máxima <span class="accordion-arrow">▼</span></div>
+        <div class="accordion-body">
+          <p style="margin-bottom:0.8rem">Más jugadores = necesitas manos más fuertes para apostar con valor. La equity se reparte y los bluffs funcionan peor.</p>
+          <ul class="concept-list" id="list-spots-multi">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Bluffear multiway es muy arriesgado (más callers)</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Jugar principalmente para valor con manos fuertes</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Pot odds mejoran para draws (más contribuyentes)</span></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== TORNEOS MTT ========== -->
+    <section class="section" id="section-torneos">
+      <div class="section-title">♣ Torneos MTT</div>
+      <p class="section-subtitle">Estrategia específica para torneos multi-mesa</p>
+
+      <div class="card">
+        <div class="card-title">Fases del Torneo</div>
+        <div style="display:flex;flex-direction:column;gap:0.5rem">
+          <div class="phase-row"><span class="badge badge-green">EARLY</span><span>Juego sólido. Acumula sin riesgos innecesarios. Mucho stack depth → manos especulativas tienen valor.</span></div>
+          <div class="phase-row"><span class="badge badge-blue">MID</span><span>Las ciegas suben. Robar ciegas constantemente. Agresión selectiva. Re-steal vs openers débiles.</span></div>
+          <div class="phase-row"><span class="badge badge-red">BURBUJA</span><span>Presión ICM máxima. Big stacks acotan a medios. Jugadores cortos sobreviven. Aprovecha la tensión.</span></div>
+          <div class="phase-row"><span class="badge badge-gold">ITM</span><span>In The Money. Explotar la relajación post-burbuja. Muchos jugadores se relajan → ataca.</span></div>
+          <div class="phase-row"><span class="badge badge-gold">FINAL TABLE</span><span>Saltos de premio enormes. ICM crítico. Juego tight-aggressive según stack. Los saltos de pagos cambian todo.</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Stack Depth Strategy</div>
+        <div class="stack-bar-wrap">
+          <div class="stack-label"><span>50bb+ → Juego estándar</span><span style="color:var(--green-soft)">Control de varianza</span></div>
+          <div class="stack-bar" style="background:linear-gradient(90deg,#27ae60,#2ecc71);width:100%">50bb+</div>
+        </div>
+        <div class="stack-bar-wrap" style="margin-top:0.6rem">
+          <div class="stack-label"><span>20–50bb → Re-steal y agresión</span><span style="color:var(--accent)">Selectivo</span></div>
+          <div class="stack-bar" style="background:linear-gradient(90deg,#c9a84c,#e8c97a);width:66%">20–50bb</div>
+        </div>
+        <div class="stack-bar-wrap" style="margin-top:0.6rem">
+          <div class="stack-label"><span>0–20bb → Push/Fold obligatorio</span><span style="color:var(--red-soft)">Sin postflop</span></div>
+          <div class="stack-bar" style="background:linear-gradient(90deg,#c0392b,#e74c3c);width:33%">0–20bb</div>
+        </div>
+        <ul class="concept-list" id="list-torneos-stack" style="margin-top:1rem">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Adaptar estrategia constantemente según stack efectivo</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Fold equity desaparece con stack muy corto → shove o fold</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Supervivencia vs acumulación: equilibrio según fase</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Spots Críticos en MTT</div>
+        <ul class="concept-list" id="list-torneos-spots">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Re-steal (3-bet shove): vs abridor débil con stack 15-25bb</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Push/fold spots: &lt; 15bb, usar charts de Nash equilibrium</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">BTN vs BB: hiper agresivo en torneos, ciegas son dinero</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Ataque a stacks medios: más sensibles al ICM que tú</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Juego vs recreacionales: exploitative puro, maximizar EV chip</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ========== ICM AVANZADO ========== -->
+    <section class="section" id="section-icm">
+      <div class="section-title">♦ ICM Avanzado</div>
+      <p class="section-subtitle">Independent Chip Model — valor real de tus fichas</p>
+
+      <div class="card">
+        <div class="card-title">¿Qué es el ICM?</div>
+        <p style="font-size:0.88rem;line-height:1.7;color:#c8c8dc;margin-bottom:0.8rem">
+          El ICM convierte tu stack de fichas en valor monetario real basándose en la estructura de pagos.
+          <strong style="color:var(--accent2)">Las fichas no tienen valor lineal en torneos</strong>: ganar fichas vale menos que perderlas.
+        </p>
+        <div class="warn"><strong>Principio fundamental:</strong> Fichas perdidas &gt; fichas ganadas en valor real. No puedes comprar más fichas → supervivencia es dinero.</div>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Presión ICM</div>
+          <ul class="concept-list" id="list-icm-presion">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Big stacks presionan a medios y cortos con ICM</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Stacks medios son los más afectados por ICM</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Evitar calls marginales aunque sean chip-EV positivos</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Presión de burbuja: fold equity es máxima</span></li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Ajustes Exploitativos MTT</div>
+          <ul class="concept-list" id="list-icm-ajustes">
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Jugadores foldan demasiado en burbuja → roba más</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Defensa débil de ciegas en torneos → steal frecuente</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Sobrevaloran manos medias → presiona con range amplio</span></li>
+            <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Mesa final: saltos de premios justifican plays ultra-tight</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">ICM en Mesa Final — Ejemplo</div>
+        <table class="poker-table">
+          <thead><tr><th>Situación</th><th>Chip EV</th><th>ICM Ajuste</th></tr></thead>
+          <tbody>
+            <tr><td>Flip con stack media (50/50)</td><td>Neutral</td><td><span class="badge badge-red">Fold</span> — no vale el riesgo</td></tr>
+            <tr><td>Shove con 20bb, líder chip</td><td>Positivo</td><td><span class="badge badge-gold">Depende</span> del premio siguiente</td></tr>
+            <tr><td>Call all-in con TPTK vs short</td><td>Positivo</td><td><span class="badge badge-green">Call</span> — eliminar a corto</td></tr>
+            <tr><td>Call vs big stack, mismo premio</td><td>+EV chip</td><td><span class="badge badge-red">Fold</span> si hay salto grande</td></tr>
+          </tbody>
+        </table>
+        <ul class="concept-list" id="list-icm-tools" style="margin-top:0.8rem">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Estudiar ICM calculators: HRC (Hold'em Resources Calculator)</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Entender ICMIZER y Nash push/fold ranges</span></li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ========== PLAN DE ESTUDIO ========== -->
+    <section class="section" id="section-estudio">
+      <div class="section-title">♠ Plan de Estudio</div>
+      <p class="section-subtitle">Prioridades de aprendizaje y autoexamen</p>
+
+      <div class="card">
+        <div class="card-title">Checklist de Estudio</div>
+        <ul class="concept-list" id="list-estudio-check">
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Memorizar preflop ranges por posición (UTG → BTN)</span><span class="concept-tag">semana 1</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Aprender push/fold charts (Nash equilibrium) con &lt; 15bb</span><span class="concept-tag">semana 1</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Estudiar ICM básico y burbuja con HRC/ICMIZER</span><span class="concept-tag">semana 2</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Dominar BTN vs BB — el spot de mayor frecuencia</span><span class="concept-tag">semana 2</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Revisión sistemática de manos jugadas (HH review)</span><span class="concept-tag">continuo</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Estudiar tipos de board y c-bet sizing</span><span class="concept-tag">semana 3</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Blockers y polarización en river</span><span class="concept-tag">semana 3</span></li>
+          <li class="concept-item" onclick="toggle(this)"><div class="concept-check"></div><span class="concept-text">Ajustes exploitativos vs fish/recreacionales</span><span class="concept-tag">semana 4</span></li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-title">🧠 Mini Quiz — Conceptos Básicos</div>
+
+        <div class="quiz-card" id="q1">
+          <p class="quiz-q">1. El bote es 200€ y el rival apuesta 100€. ¿Cuánta equity mínima necesitas para hacer el call?</p>
+          <div class="quiz-opts">
+            <div class="quiz-opt" onclick="answer(this,'q1',false,'Incorrecto. 100/(200+100+100) = 100/400 = 25%')">20%</div>
+            <div class="quiz-opt" onclick="answer(this,'q1',true,'¡Correcto! Pagas 100 para ganar 400 en total → 100/400 = 25% equity necesaria.')">25%</div>
+            <div class="quiz-opt" onclick="answer(this,'q1',false,'Incorrecto. Eso sería si el bote fuera mucho mayor.')">33%</div>
+            <div class="quiz-opt" onclick="answer(this,'q1',false,'Incorrecto. No necesitas tanta equity con apuesta relativa pequeña.')">50%</div>
+          </div>
+          <div class="quiz-feedback" id="fb-q1"></div>
+        </div>
+
+        <div class="quiz-card" id="q2">
+          <p class="quiz-q">2. En un torneo en burbuja, un big stack te hace all-in. Tienes AKs vs su rango estimado de 22+, AQ+. Tu equity es ~52%. ¿Debes llamar?</p>
+          <div class="quiz-opts">
+            <div class="quiz-opt" onclick="answer(this,'q2',false,'Incorrecto. El chip EV es +EV pero el ICM puede hacer este call negativo en $EV.')">Sí, tienes 52% equity, siempre call.</div>
+            <div class="quiz-opt" onclick="answer(this,'q2',true,'¡Correcto! En burbuja el ICM penaliza eliminarte. Un call con 52% equity puede ser negativo en $EV por el salto de premio.')">Depende del ICM — puede ser fold.</div>
+            <div class="quiz-opt" onclick="answer(this,'q2',false,'Incorrecto. Hay situaciones donde sí debes llamar si el salto de premio es pequeño.')">Siempre fold en burbuja.</div>
+          </div>
+          <div class="quiz-feedback" id="fb-q2"></div>
+        </div>
+
+        <div class="quiz-card" id="q3">
+          <p class="quiz-q">3. Tienes 12bb en un torneo. El BTN abre a 2.5bb. ¿Cuál es generalmente tu única opción con manos playables?</p>
+          <div class="quiz-opts">
+            <div class="quiz-opt" onclick="answer(this,'q3',false,'Incorrecto. Con 12bb no tienes stack para call y jugar postflop efectivamente.')">Call y jugar postflop</div>
+            <div class="quiz-opt" onclick="answer(this,'q3',false,'Incorrecto. Un 3-bet pequeño te compromete de todas formas sin fold equity suficiente.')">3-bet pequeño a 6bb</div>
+            <div class="quiz-opt" onclick="answer(this,'q3',true,'¡Correcto! Con menos de 15bb estás en territorio push/fold. Shove all-in o fold, sin medias tintas.')">Shove all-in o fold</div>
+            <div class="quiz-opt" onclick="answer(this,'q3',false,'Incorrecto. Las ciegas son muy caras con 12bb — no puedes limitarte a premiums.')">Esperar solo premiums y fold</div>
+          </div>
+          <div class="quiz-feedback" id="fb-q3"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========== REGLAS DE ORO ========== -->
+    <section class="section" id="section-reglas">
+      <div class="section-title">♥ Reglas de Oro</div>
+      <p class="section-subtitle">Los principios que lo gobiernan todo</p>
+
+      <div class="rule-card">
+        <div class="rule-number">01</div>
+        <div class="rule-text"><strong>Las ciegas son tu principal ingreso.</strong> En torneos, las ciegas suben constantemente. Robar ciegas de forma consistente es lo que mantiene y aumenta tu stack. Nunca dejes de presionar las ciegas cuando la situación lo permite.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-number">02</div>
+        <div class="rule-text"><strong>La fold equity gana torneos.</strong> Tu capacidad de hacer foldar al rival con shoves y 3-bets es más valiosa que tu equity en muchos spots. Defiende tu fold equity apostando cuando tienes stack suficiente.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-number">03</div>
+        <div class="rule-text"><strong>Presiona cuando puedas, sobrevive cuando toque.</strong> El equilibrio entre acumulación y supervivencia es el arte del torneo. Saber cuándo es el momento de cada uno define a los buenos jugadores de torneos.</div>
+      </div>
+
+      <div class="rule-card">
+        <div class="rule-number">04</div>
+        <div class="rule-text"><strong>Piensa siempre en rangos, nunca en manos concretas.</strong> Tu rival tiene un rango de manos, no una mano específica. Construye tu estrategia contra su rango completo, no contra lo que crees que tiene en ese momento.</div>
+      </div>
+
+      <div class="card" style="margin-top:1.2rem">
+        <div class="card-title">Resumen Final</div>
+        <table class="poker-table">
+          <thead><tr><th>Calle</th><th>Foco Principal</th><th>Concepto clave</th></tr></thead>
+          <tbody>
+            <tr><td><span class="badge badge-gold">PREFLOP</span></td><td>Rangos sólidos por posición</td><td>Sizings y SPR</td></tr>
+            <tr><td><span class="badge badge-blue">FLOP</span></td><td>Estrategia según tipo de board</td><td>C-bet frecuencia y sizing</td></tr>
+            <tr><td><span class="badge badge-green">TURN</span></td><td>Presión y polarización</td><td>Second barrel / delayed cbet</td></tr>
+            <tr><td><span class="badge badge-red">RIVER</span></td><td>Decisión final value vs bluff</td><td>Blockers y overbet</td></tr>
+            <tr><td><span class="badge badge-gold">MTT</span></td><td>Adaptación constante + ICM</td><td>Fold equity es todo</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </div><!-- /content -->
+</main>
+
+<script src="poker-guide.js"></script>
+</body>
+</html>
