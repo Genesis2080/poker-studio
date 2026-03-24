@@ -1,0 +1,15 @@
+{
+  "name": "poker-study-app",
+  "version": "1.0.0",
+  "description": "Aplicación de escritorio para estudiar Poker Texas Hold'em",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0"
+  },
+  "author": "Tu nombre",
+  "license": "MIT"
+}

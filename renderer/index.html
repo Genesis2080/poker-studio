@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; script-src 'self';">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Poker Study</title>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Space+Mono:wght@400;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+
+<!-- TITLEBAR (custom, solo estética) -->
+<div class="titlebar">
+  <div class="titlebar-suits">♠ ♥ ♣ ♦</div>
+  <div class="titlebar-title">Poker Study — Texas Hold'em</div>
+  <div class="titlebar-right" id="data-path-label"></div>
+</div>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- SIDEBAR NAV -->
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-suit">♠</span>
+      <span class="logo-text">Poker<br>Study</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-group-label">Teoría</div>
+      <button class="nav-btn active" data-view="guide">
+        <span class="nav-icon">📖</span> Guía de Estudio
+      </button>
+      <button class="nav-btn" data-view="flashcards">
+        <span class="nav-icon">🃏</span> Flashcards
+      </button>
+      <button class="nav-btn" data-view="notes">
+        <span class="nav-icon">📝</span> Mis Notas
+      </button>
+
+      <div class="nav-group-label" style="margin-top:1.2rem">Seguimiento</div>
+      <button class="nav-btn" data-view="history">
+        <span class="nav-icon">📅</span> Historial
+      </button>
+      <button class="nav-btn" data-view="stats">
+        <span class="nav-icon">📊</span> Estadísticas
+      </button>
+    </nav>
+
+    <!-- mini progress -->
+    <div class="sidebar-footer">
+      <div class="sf-label">Progreso global</div>
+      <div class="sf-bar-track"><div class="sf-bar-fill" id="sf-fill"></div></div>
+      <div class="sf-pct" id="sf-pct">0%</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- ════════════════════════════════
+         VIEW: GUÍA DE ESTUDIO
+         ════════════════════════════════ -->
+    <div class="view active" id="view-guide">
+
+      <!-- sub-tabs -->
+      <div class="sub-tabs">
+        <button class="sub-tab active" data-section="fundamentos">♠ Fundamentos</button>
+        <button class="sub-tab" data-section="preflop">♥ Preflop</button>
+        <button class="sub-tab" data-section="flop">♣ Flop</button>
+        <button class="sub-tab" data-section="turn">♦ Turn</button>
+        <button class="sub-tab" data-section="river">♠ River</button>
+        <button class="sub-tab" data-section="spots">♥ Spots</button>
+        <button class="sub-tab" data-section="torneos">♣ MTT</button>
+        <button class="sub-tab" data-section="icm">♦ ICM</button>
+        <button class="sub-tab" data-section="reglas">★ Reglas</button>
+      </div>
+
+      <div class="guide-body" id="guide-body">
+        <!-- Sections rendered by JS -->
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: FLASHCARDS
+         ════════════════════════════════ -->
+    <div class="view" id="view-flashcards">
+      <div class="view-header">
+        <h2 class="view-title">🃏 Flashcards</h2>
+        <div class="view-actions">
+          <button class="btn-secondary" id="fc-shuffle">Barajar</button>
+          <button class="btn-secondary" id="fc-reset-session">Nueva sesión</button>
+          <button class="btn-primary" id="fc-add-btn">+ Nueva tarjeta</button>
+        </div>
+      </div>
+
+      <!-- Deck selector -->
+      <div class="fc-deck-bar">
+        <button class="deck-chip active" data-deck="all">Todas</button>
+        <button class="deck-chip" data-deck="preflop">Preflop</button>
+        <button class="deck-chip" data-deck="postflop">Postflop</button>
+        <button class="deck-chip" data-deck="torneos">MTT/ICM</button>
+        <button class="deck-chip" data-deck="custom">Mis tarjetas</button>
+      </div>
+
+      <!-- Card display -->
+      <div class="fc-arena">
+        <div class="fc-counter" id="fc-counter">1 / 12</div>
+        <div class="fc-card" id="fc-card">
+          <div class="fc-card-inner" id="fc-card-inner">
+            <div class="fc-front">
+              <div class="fc-suit-deco">♠</div>
+              <div class="fc-question" id="fc-question">Cargando...</div>
+              <div class="fc-hint">Haz clic para ver la respuesta</div>
+            </div>
+            <div class="fc-back">
+              <div class="fc-suit-deco" style="color:var(--red)">♥</div>
+              <div class="fc-answer" id="fc-answer"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="fc-controls" id="fc-controls" style="display:none">
+          <button class="fc-btn fc-btn-bad"  id="fc-bad">✗ Difícil</button>
+          <button class="fc-btn fc-btn-ok"   id="fc-ok">~ Regular</button>
+          <button class="fc-btn fc-btn-good" id="fc-good">✓ Fácil</button>
+        </div>
+        <div class="fc-next-wrap" id="fc-next-wrap">
+          <button class="btn-secondary" id="fc-prev">← Anterior</button>
+          <button class="btn-primary"   id="fc-next">Siguiente →</button>
+        </div>
+      </div>
+
+      <!-- Session summary (hidden until done) -->
+      <div class="fc-summary" id="fc-summary" style="display:none">
+        <h3>Sesión completada 🎉</h3>
+        <div class="fc-summary-stats" id="fc-summary-stats"></div>
+        <button class="btn-primary" id="fc-restart">Repetir sesión</button>
+      </div>
+
+      <!-- Add card modal -->
+      <div class="modal-overlay" id="fc-modal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <span>Nueva Flashcard</span>
+            <button class="modal-close" id="fc-modal-close">✕</button>
+          </div>
+          <div class="modal-body">
+            <label class="field-label">Categoría</label>
+            <select class="field-input" id="fc-new-deck">
+              <option value="custom">Mis tarjetas</option>
+              <option value="preflop">Preflop</option>
+              <option value="postflop">Postflop</option>
+              <option value="torneos">MTT/ICM</option>
+            </select>
+            <label class="field-label">Pregunta</label>
+            <textarea class="field-input" id="fc-new-q" rows="3" placeholder="¿Cuáles son los pot odds si el bote es 100 y la apuesta es 50?"></textarea>
+            <label class="field-label">Respuesta</label>
+            <textarea class="field-input" id="fc-new-a" rows="3" placeholder="Necesitas 25% de equity mínima..."></textarea>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" id="fc-modal-cancel">Cancelar</button>
+            <button class="btn-primary"   id="fc-modal-save">Guardar tarjeta</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: NOTAS
+         ════════════════════════════════ -->
+    <div class="view" id="view-notes">
+      <div class="view-header">
+        <h2 class="view-title">📝 Mis Notas</h2>
+        <button class="btn-primary" id="note-add-btn">+ Nueva nota</button>
+      </div>
+
+      <div class="notes-layout">
+        <!-- List -->
+        <div class="notes-list" id="notes-list">
+          <div class="notes-search-wrap">
+            <input class="notes-search" id="notes-search" type="text" placeholder="Buscar notas...">
+          </div>
+          <div id="notes-list-items"></div>
+        </div>
+
+        <!-- Editor -->
+        <div class="notes-editor" id="notes-editor">
+          <div class="note-empty" id="note-empty">
+            <span>📄</span>
+            <p>Selecciona una nota o crea una nueva</p>
+          </div>
+          <div id="note-form" style="display:none;height:100%;display:flex;flex-direction:column;gap:0.8rem">
+            <input class="note-title-input" id="note-title" type="text" placeholder="Título de la nota...">
+            <select class="field-input" id="note-tag" style="width:fit-content">
+              <option value="general">General</option>
+              <option value="preflop">Preflop</option>
+              <option value="postflop">Postflop</option>
+              <option value="torneos">MTT/ICM</option>
+              <option value="session">Sesión</option>
+              <option value="leak">Leak detectado</option>
+            </select>
+            <textarea class="note-body-input" id="note-body" placeholder="Escribe tus apuntes aquí...&#10;&#10;Puedes anotar manos, conceptos, errores que cometes, situaciones específicas..."></textarea>
+            <div class="note-actions">
+              <span class="note-saved-indicator" id="note-saved-indicator"></span>
+              <button class="btn-danger" id="note-delete-btn">Eliminar</button>
+              <button class="btn-primary" id="note-save-btn">Guardar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: HISTORIAL DE SESIONES
+         ════════════════════════════════ -->
+    <div class="view" id="view-history">
+      <div class="view-header">
+        <h2 class="view-title">📅 Historial de Sesiones</h2>
+        <button class="btn-primary" id="session-add-btn">+ Registrar sesión</button>
+      </div>
+
+      <div id="sessions-list"></div>
+
+      <!-- Add session modal -->
+      <div class="modal-overlay" id="session-modal" style="display:none">
+        <div class="modal">
+          <div class="modal-header">
+            <span>Registrar Sesión de Estudio</span>
+            <button class="modal-close" id="session-modal-close">✕</button>
+          </div>
+          <div class="modal-body">
+            <label class="field-label">Fecha</label>
+            <input class="field-input" id="session-date" type="date">
+
+            <label class="field-label">Duración (minutos)</label>
+            <input class="field-input" id="session-duration" type="number" min="1" placeholder="60">
+
+            <label class="field-label">Temas estudiados</label>
+            <div class="topic-chips" id="topic-chips">
+              <label class="topic-chip"><input type="checkbox" value="preflop"> Preflop</label>
+              <label class="topic-chip"><input type="checkbox" value="flop"> Flop</label>
+              <label class="topic-chip"><input type="checkbox" value="turn"> Turn</label>
+              <label class="topic-chip"><input type="checkbox" value="river"> River</label>
+              <label class="topic-chip"><input type="checkbox" value="icm"> ICM</label>
+              <label class="topic-chip"><input type="checkbox" value="torneos"> Torneos</label>
+              <label class="topic-chip"><input type="checkbox" value="flashcards"> Flashcards</label>
+              <label class="topic-chip"><input type="checkbox" value="hh"> HH Review</label>
+            </div>
+
+            <label class="field-label">Notas de la sesión</label>
+            <textarea class="field-input" id="session-notes" rows="3" placeholder="¿Qué aprendiste hoy? ¿Qué quieres repasar?"></textarea>
+
+            <label class="field-label">Valoración de la sesión</label>
+            <div class="rating-row" id="session-rating">
+              <button class="rating-btn" data-val="1">1 ★</button>
+              <button class="rating-btn" data-val="2">2 ★</button>
+              <button class="rating-btn" data-val="3">3 ★</button>
+              <button class="rating-btn" data-val="4">4 ★</button>
+              <button class="rating-btn" data-val="5">5 ★</button>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn-secondary" id="session-modal-cancel">Cancelar</button>
+            <button class="btn-primary" id="session-modal-save">Guardar sesión</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ════════════════════════════════
+         VIEW: ESTADÍSTICAS
+         ════════════════════════════════ -->
+    <div class="view" id="view-stats">
+      <div class="view-header">
+        <h2 class="view-title">📊 Estadísticas de Progreso</h2>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-sessions">0</div>
+          <div class="kpi-label">Sesiones totales</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-hours">0h</div>
+          <div class="kpi-label">Horas de estudio</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-concepts">0%</div>
+          <div class="kpi-label">Conceptos dominados</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-value" id="kpi-streak">0</div>
+          <div class="kpi-label">Racha actual (días)</div>
+        </div>
+      </div>
+
+      <div class="stats-grid">
+        <!-- Progreso por sección -->
+        <div class="stat-card">
+          <div class="stat-card-title">Progreso por sección</div>
+          <div id="section-progress-bars"></div>
+        </div>
+
+        <!-- Flashcard performance -->
+        <div class="stat-card">
+          <div class="stat-card-title">Rendimiento Flashcards</div>
+          <div id="fc-performance"></div>
+        </div>
+
+        <!-- Topics studied heatmap-style -->
+        <div class="stat-card" style="grid-column: span 2">
+          <div class="stat-card-title">Temas más estudiados</div>
+          <div class="topic-bar-chart" id="topic-bar-chart"></div>
+        </div>
+
+        <!-- Weekly activity -->
+        <div class="stat-card" style="grid-column: span 2">
+          <div class="stat-card-title">Actividad reciente (últimas 8 semanas)</div>
+          <div class="activity-grid" id="activity-grid"></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
