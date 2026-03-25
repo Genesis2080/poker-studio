@@ -192,16 +192,19 @@
             <span>📄</span>
             <p>Selecciona una nota o crea una nueva</p>
           </div>
-          <div id="note-form" style="display:none;height:100%;display:flex;flex-direction:column;gap:0.8rem">
+          <div id="note-form" class="note-form-hidden">
+            <div class="note-form-topbar">
+              <select class="field-input" id="note-tag" style="width:fit-content">
+                <option value="general">General</option>
+                <option value="preflop">Preflop</option>
+                <option value="postflop">Postflop</option>
+                <option value="torneos">MTT/ICM</option>
+                <option value="session">Sesión</option>
+                <option value="leak">Leak detectado</option>
+              </select>
+              <button class="note-close-btn" id="note-close-btn" title="Cerrar nota">✕</button>
+            </div>
             <input class="note-title-input" id="note-title" type="text" placeholder="Título de la nota...">
-            <select class="field-input" id="note-tag" style="width:fit-content">
-              <option value="general">General</option>
-              <option value="preflop">Preflop</option>
-              <option value="postflop">Postflop</option>
-              <option value="torneos">MTT/ICM</option>
-              <option value="session">Sesión</option>
-              <option value="leak">Leak detectado</option>
-            </select>
             <textarea class="note-body-input" id="note-body" placeholder="Escribe tus apuntes aquí...&#10;&#10;Puedes anotar manos, conceptos, errores que cometes, situaciones específicas..."></textarea>
             <div class="note-actions">
               <span class="note-saved-indicator" id="note-saved-indicator"></span>

@@ -759,12 +759,21 @@ function initFlashcards() {
   });
 
   // Add card modal
-  document.getElementById('fc-add-btn').addEventListener('click', () => {
-    document.getElementById('fc-modal').style.display = 'flex';
-  });
-  document.getElementById('fc-modal-close').addEventListener('click',  () => { document.getElementById('fc-modal').style.display = 'none'; });
-  document.getElementById('fc-modal-cancel').addEventListener('click', () => { document.getElementById('fc-modal').style.display = 'none'; });
-  document.getElementById('fc-modal-save').addEventListener('click', saveNewCard);
+  const fcModal = document.getElementById('fc-modal');
+  function openFcModal() {
+    document.getElementById('fc-new-q').value = '';
+    document.getElementById('fc-new-a').value = '';
+    document.getElementById('fc-new-deck').value = 'custom';
+    fcModal.style.display = 'flex';
+  }
+  function closeFcModal() { fcModal.style.display = 'none'; }
+
+  document.getElementById('fc-add-btn').addEventListener('click', openFcModal);
+  document.getElementById('fc-modal-close').addEventListener('click',  closeFcModal);
+  document.getElementById('fc-modal-cancel').addEventListener('click', closeFcModal);
+  document.getElementById('fc-modal-save').addEventListener('click',   saveNewCard);
+  // Clic en el overlay cierra el modal
+  fcModal.addEventListener('click', e => { if (e.target === fcModal) closeFcModal(); });
 
   startFcSession();
 }
@@ -854,7 +863,12 @@ function saveNewCard() {
   const q = document.getElementById('fc-new-q').value.trim();
   const a = document.getElementById('fc-new-a').value.trim();
   const deck = document.getElementById('fc-new-deck').value;
-  if (!q || !a) return;
+  if (!q || !a) {
+    // Resaltar campos vacíos
+    if (!q) document.getElementById('fc-new-q').focus();
+    else     document.getElementById('fc-new-a').focus();
+    return;
+  }
   const card = { id: 'cu' + Date.now(), deck, q, a };
   APP.flashcards.custom.push(card);
   saveApp();
@@ -865,13 +879,38 @@ function saveNewCard() {
 }
 
 // ════════════════════════════════════════════════════════════
+// UTILIDAD: CONFIRM DIALOG
+// ════════════════════════════════════════════════════════════
+
+function showConfirm(title, message, onConfirm) {
+  const overlay = document.createElement('div');
+  overlay.className = 'confirm-overlay';
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <div class="confirm-title">${title}</div>
+      <p>${message}</p>
+      <div class="confirm-actions">
+        <button class="btn-secondary" id="confirm-cancel">Cancelar</button>
+        <button class="btn-danger"    id="confirm-ok">Eliminar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#confirm-cancel').addEventListener('click', () => overlay.remove());
+  overlay.querySelector('#confirm-ok').addEventListener('click', () => { overlay.remove(); onConfirm(); });
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+}
+
+// ════════════════════════════════════════════════════════════
 // NOTAS
 // ════════════════════════════════════════════════════════════
 
 function initNotes() {
   document.getElementById('note-add-btn').addEventListener('click', newNote);
   document.getElementById('note-save-btn').addEventListener('click', saveNote);
-  document.getElementById('note-delete-btn').addEventListener('click', deleteNote);
+  document.getElementById('note-delete-btn').addEventListener('click', () => {
+    showConfirm('Eliminar nota', '¿Seguro que quieres eliminar esta nota? Esta acción no se puede deshacer.', deleteNote);
+  });
+  document.getElementById('note-close-btn').addEventListener('click', closeNote);
   document.getElementById('notes-search').addEventListener('input', renderNotesList);
   renderNotesList();
 }
@@ -879,7 +918,7 @@ function initNotes() {
 function renderNotesList() {
   const q = (document.getElementById('notes-search').value || '').toLowerCase();
   const filtered = (APP.notes || []).filter(n =>
-    n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q)
+    (n.title || '').toLowerCase().includes(q) || (n.body || '').toLowerCase().includes(q)
   ).sort((a, b) => b.updatedAt - a.updatedAt);
 
   const container = document.getElementById('notes-list-items');
@@ -911,8 +950,8 @@ function newNote() {
     updatedAt: Date.now()
   };
   APP.notes.push(note);
+  saveApp();
   openNote(note.id);
-  renderNotesList();
 }
 
 function openNote(id) {
@@ -920,11 +959,22 @@ function openNote(id) {
   const note = APP.notes.find(n => n.id === id);
   if (!note) return;
 
+  // FIX: usar clases en lugar de style inline para controlar visibilidad
   document.getElementById('note-empty').style.display = 'none';
-  document.getElementById('note-form').style.display = 'flex';
-  document.getElementById('note-title').value = note.title;
-  document.getElementById('note-body').value  = note.body;
-  document.getElementById('note-tag').value   = note.tag || 'general';
+  const form = document.getElementById('note-form');
+  form.className = 'note-form-visible';
+
+  document.getElementById('note-title').value = note.title || '';
+  document.getElementById('note-body').value  = note.body  || '';
+  document.getElementById('note-tag').value   = note.tag   || 'general';
+  document.getElementById('note-saved-indicator').classList.remove('show');
+  renderNotesList();
+}
+
+function closeNote() {
+  currentNoteId = null;
+  document.getElementById('note-empty').style.display = 'flex';
+  document.getElementById('note-form').className = 'note-form-hidden';
   renderNotesList();
 }
 
@@ -946,20 +996,20 @@ function saveNote() {
 function deleteNote() {
   if (!currentNoteId) return;
   APP.notes = APP.notes.filter(n => n.id !== currentNoteId);
-  currentNoteId = null;
-  document.getElementById('note-empty').style.display = 'flex';
-  document.getElementById('note-form').style.display = 'none';
   saveApp();
-  renderNotesList();
+  closeNote();
 }
 
 // ════════════════════════════════════════════════════════════
 // HISTORIAL DE SESIONES
 // ════════════════════════════════════════════════════════════
 
+function closeSessionModal() {
+  document.getElementById('session-modal').style.display = 'none';
+}
+
 function initHistory() {
   document.getElementById('session-add-btn').addEventListener('click', () => {
-    // Set today's date
     document.getElementById('session-date').value = new Date().toISOString().split('T')[0];
     sessionRatingVal = 0;
     document.querySelectorAll('.rating-btn').forEach(b => b.classList.remove('active'));
@@ -969,9 +1019,15 @@ function initHistory() {
     document.getElementById('session-modal').style.display = 'flex';
   });
 
-  document.getElementById('session-modal-close').addEventListener('click',  () => { document.getElementById('session-modal').style.display = 'none'; });
-  document.getElementById('session-modal-cancel').addEventListener('click', () => { document.getElementById('session-modal').style.display = 'none'; });
-  document.getElementById('session-modal-save').addEventListener('click', saveSession);
+  // ✕ y Cancelar cierran el modal
+  document.getElementById('session-modal-close').addEventListener('click',  closeSessionModal);
+  document.getElementById('session-modal-cancel').addEventListener('click', closeSessionModal);
+  document.getElementById('session-modal-save').addEventListener('click',   saveSession);
+
+  // Clic en el overlay (fuera del modal) también cierra
+  document.getElementById('session-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('session-modal')) closeSessionModal();
+  });
 
   document.querySelectorAll('.rating-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -985,20 +1041,33 @@ function initHistory() {
 }
 
 function saveSession() {
+  const date = document.getElementById('session-date').value;
+  if (!date) {
+    document.getElementById('session-date').focus();
+    return;
+  }
   const topics = [...document.querySelectorAll('.topic-chip input:checked')].map(cb => cb.value);
   const session = {
     id: 'ses' + Date.now(),
-    date: document.getElementById('session-date').value,
+    date,
     duration: parseInt(document.getElementById('session-duration').value) || 0,
     topics,
-    notes: document.getElementById('session-notes').value,
+    notes: document.getElementById('session-notes').value.trim(),
     rating: sessionRatingVal,
     createdAt: Date.now()
   };
   APP.sessions.push(session);
   saveApp();
-  document.getElementById('session-modal').style.display = 'none';
+  closeSessionModal();
   renderSessions();
+}
+
+function deleteSession(id) {
+  showConfirm('Eliminar sesión', '¿Eliminar esta sesión del historial? No se puede deshacer.', () => {
+    APP.sessions = APP.sessions.filter(s => s.id !== id);
+    saveApp();
+    renderSessions();
+  });
 }
 
 function renderSessions() {
@@ -1010,12 +1079,15 @@ function renderSessions() {
     return;
   }
 
-  container.innerHTML = sessions.map(s => {
+  container.innerHTML = '';
+  sessions.forEach(s => {
     const d = new Date(s.date + 'T12:00:00');
-    const dayStr = d.toLocaleDateString('es-ES', { weekday:'short', day:'numeric', month:'short' });
     const topics = (s.topics || []).map(t => `<span class="sc-topic-tag">${t}</span>`).join('');
     const stars  = '★'.repeat(s.rating || 0) + '☆'.repeat(5 - (s.rating || 0));
-    return `<div class="session-card">
+
+    const card = document.createElement('div');
+    card.className = 'session-card';
+    card.innerHTML = `
       <div>
         <div class="sc-date">${d.getDate()} ${d.toLocaleDateString('es-ES',{month:'short'})}</div>
         <div class="sc-date-sub">${d.toLocaleDateString('es-ES',{weekday:'long'})}</div>
@@ -1027,9 +1099,12 @@ function renderSessions() {
       <div class="sc-meta">
         <div class="sc-duration">${s.duration ? s.duration + ' min' : '—'}</div>
         <div class="sc-rating">${stars}</div>
-      </div>
-    </div>`;
-  }).join('');
+        <button class="sc-delete-btn" title="Eliminar sesión">✕ eliminar</button>
+      </div>`;
+
+    card.querySelector('.sc-delete-btn').addEventListener('click', () => deleteSession(s.id));
+    container.appendChild(card);
+  });
 }
 
 // ════════════════════════════════════════════════════════════

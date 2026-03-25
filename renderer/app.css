@@ -957,6 +957,7 @@ html, body {
   flex-direction: column;
   padding: 1.2rem 1.4rem;
   overflow: hidden;
+  position: relative;
 }
 
 .note-empty {
@@ -971,6 +972,47 @@ html, body {
 }
 
 .note-empty p { font-size: 0.85rem; font-family: 'Space Mono', monospace; }
+
+/* FIX: usar clases en lugar de inline style para controlar visibilidad */
+.note-form-hidden {
+  display: none;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.note-form-visible {
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+/* Topbar del editor de notas con selector de tag y botón de cierre */
+.note-form-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.note-close-btn {
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--muted);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.note-close-btn:hover { color: var(--text); border-color: var(--accent); }
 
 .note-title-input {
   background: transparent;
@@ -1092,12 +1134,75 @@ html, body {
 
 .sc-rating { color: var(--accent); font-size: 0.7rem; }
 
+.sc-delete-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  transition: all 0.15s;
+  font-family: 'Space Mono', monospace;
+  margin-top: 0.3rem;
+}
+
+.sc-delete-btn:hover {
+  color: var(--red-soft);
+  border-color: rgba(192,57,43,0.3);
+  background: rgba(192,57,43,0.08);
+}
+
 .no-sessions {
   text-align: center;
   padding: 3rem;
   font-family: 'Space Mono', monospace;
   font-size: 0.75rem;
   color: var(--muted);
+}
+
+/* Confirm dialog (mini modal) */
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.1s ease;
+}
+
+.confirm-box {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+  animation: slideUp 0.15s ease;
+}
+
+.confirm-box p {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+  margin-bottom: 1.2rem;
+}
+
+.confirm-box .confirm-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 0.5rem;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: center;
 }
 
 /* ── STATS ─────────────────────────────────── */
