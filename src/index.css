@@ -1,0 +1,67 @@
+/* ── Google Fonts ─────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap');
+
+/* ── Design tokens ────────────────────────────────────── */
+:root {
+  /* Paleta */
+  --bg:          #0d0f14;
+  --bg2:         #12151c;
+  --surface:     #181c26;
+  --surface2:    #1f2433;
+  --border:      #252d3d;
+  --border2:     #2e3a50;
+
+  /* Acento — verde neón apagado, más sofisticado que dorado */
+  --accent:      #4ade80;
+  --accent-dim:  #166534;
+  --accent-glow: rgba(74, 222, 128, 0.15);
+
+  /* Semánticos */
+  --red:         #f87171;
+  --red-dim:     #7f1d1d;
+  --amber:       #fbbf24;
+  --amber-dim:   #78350f;
+  --blue:        #60a5fa;
+  --blue-dim:    #1e3a5f;
+  --purple:      #a78bfa;
+
+  /* Texto */
+  --text:        #e8eaf0;
+  --text2:       #94a3b8;
+  --text3:       #4a5568;
+
+  /* Geometría */
+  --sidebar-w:   220px;
+  --radius-sm:   6px;
+  --radius:      10px;
+  --radius-lg:   16px;
+
+  /* Fuentes */
+  --font-display: 'DM Serif Display', serif;
+  --font-mono:    'DM Mono', monospace;
+  --font-body:    'DM Sans', sans-serif;
+}
+
+/* ── Reset ────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── Scrollbar ────────────────────────────────────────── */
+::-webkit-scrollbar              { width: 4px; height: 4px; }
+::-webkit-scrollbar-track        { background: transparent; }
+::-webkit-scrollbar-thumb        { background: var(--border2); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover  { background: var(--accent-dim); }
+
+/* ── Utilidades base ──────────────────────────────────── */
+button { font-family: var(--font-body); cursor: pointer; }
+input, textarea, select { font-family: var(--font-body); }

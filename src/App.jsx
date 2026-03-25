@@ -1,0 +1,193 @@
+import React, { useState, useEffect, createContext, useContext } from 'react'
+import Dashboard from './pages/Dashboard.jsx'
+import Manos     from './pages/Manos.jsx'
+import Sesiones  from './pages/Sesiones.jsx'
+
+/* ── Contexto global de datos ───────────────────────────── */
+export const AppContext = createContext(null)
+
+export function useApp() { return useContext(AppContext) }
+
+const INITIAL_DATA = {
+  hands:    [],   // { id, date, position, result, notes, tags }
+  sessions: [],   // { id, date, duration, buyIn, cashOut, notes, location }
+}
+
+/* ── Íconos SVG inline (sin dependencias) ─────────────── */
+const IconGrid = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
+    <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+  </svg>
+)
+const IconCards = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <rect x="2" y="5" width="14" height="18" rx="2"/>
+    <path d="M6 2h14a2 2 0 0 1 2 2v14"/>
+  </svg>
+)
+const IconCalendar = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <rect x="3" y="4" width="18" height="18" rx="2"/>
+    <path d="M16 2v4M8 2v4M3 10h18"/>
+  </svg>
+)
+const IconSpade = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2C8 6 3 8 3 12a4 4 0 0 0 7 2.6C9.5 16 9 18 8 20h8c-1-2-1.5-4-2-5.4A4 4 0 0 0 21 12c0-4-5-6-9-10z"/>
+  </svg>
+)
+
+/* ── Nav item ─────────────────────────────────────────── */
+function NavItem({ icon, label, active, onClick }) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: '10px',
+      width: '100%', padding: '9px 12px',
+      background: active ? 'rgba(74,222,128,0.1)' : 'transparent',
+      border: `1px solid ${active ? 'rgba(74,222,128,0.25)' : 'transparent'}`,
+      borderRadius: 'var(--radius-sm)',
+      color: active ? 'var(--accent)' : 'var(--text2)',
+      fontFamily: 'var(--font-body)', fontSize: '13px', fontWeight: active ? 500 : 400,
+      cursor: 'pointer', transition: 'all 0.15s', textAlign: 'left',
+      marginBottom: '2px',
+    }}
+    onMouseEnter={e => { if (!active) { e.currentTarget.style.background = 'var(--surface2)'; e.currentTarget.style.color = 'var(--text)' } }}
+    onMouseLeave={e => { if (!active) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text2)' } }}
+    >
+      <span style={{ opacity: active ? 1 : 0.7, flexShrink: 0 }}>{icon}</span>
+      {label}
+    </button>
+  )
+}
+
+/* ── Sidebar ──────────────────────────────────────────── */
+function Sidebar({ page, setPage, stats }) {
+  const navItems = [
+    { id: 'dashboard', icon: <IconGrid />,     label: 'Dashboard'  },
+    { id: 'manos',     icon: <IconCards />,    label: 'Manos'      },
+    { id: 'sesiones',  icon: <IconCalendar />, label: 'Sesiones'   },
+  ]
+
+  return (
+    <aside style={{
+      width: 'var(--sidebar-w)', flexShrink: 0,
+      background: 'var(--bg2)',
+      borderRight: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column',
+      height: '100%', overflow: 'hidden',
+    }}>
+      {/* Logo */}
+      <div style={{
+        padding: '20px 16px 18px',
+        borderBottom: '1px solid var(--border)',
+        display: 'flex', alignItems: 'center', gap: '10px',
+      }}>
+        <span style={{ color: 'var(--accent)', display: 'flex' }}><IconSpade /></span>
+        <div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '15px', color: 'var(--text)', lineHeight: 1.1 }}>
+            Poker Tracker
+          </div>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)', marginTop: '2px' }}>
+            v1.0.0
+          </div>
+        </div>
+      </div>
+
+      {/* Nav */}
+      <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px', marginBottom: '8px' }}>
+          Menú
+        </div>
+        {navItems.map(item => (
+          <NavItem key={item.id} {...item} active={page === item.id} onClick={() => setPage(item.id)} />
+        ))}
+      </nav>
+
+      {/* Footer stats */}
+      <div style={{
+        padding: '14px 16px',
+        borderTop: '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', gap: '8px',
+      }}>
+        <StatRow label="Manos registradas" value={stats.hands} />
+        <StatRow label="Sesiones totales"  value={stats.sessions} />
+        <StatRow
+          label="Resultado neto"
+          value={`${stats.netResult >= 0 ? '+' : ''}${stats.netResult.toFixed(0)}€`}
+          valueColor={stats.netResult >= 0 ? 'var(--accent)' : 'var(--red)'}
+        />
+      </div>
+    </aside>
+  )
+}
+
+function StatRow({ label, value, valueColor = 'var(--text)' }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text3)' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', fontWeight: 500, color: valueColor }}>{value}</span>
+    </div>
+  )
+}
+
+/* ── App root ─────────────────────────────────────────── */
+export default function App() {
+  const [page, setPage]   = useState('dashboard')
+  const [data, setData]   = useState(INITIAL_DATA)
+  const [ready, setReady] = useState(false)
+
+  // Carga inicial
+  useEffect(() => {
+    async function load() {
+      try {
+        if (window.electronAPI) {
+          const saved = await window.electronAPI.loadData()
+          if (saved && typeof saved === 'object') {
+            setData({ ...INITIAL_DATA, ...saved })
+          }
+        }
+      } catch (e) {
+        console.warn('Sin Electron API — modo web', e)
+      } finally {
+        setReady(true)
+      }
+    }
+    load()
+  }, [])
+
+  // Guardar cada vez que cambian los datos
+  useEffect(() => {
+    if (!ready) return
+    if (window.electronAPI) window.electronAPI.saveData(data).catch(console.warn)
+  }, [data, ready])
+
+  // Stats para sidebar
+  const stats = {
+    hands:     data.hands.length,
+    sessions:  data.sessions.length,
+    netResult: data.sessions.reduce((acc, s) => acc + ((s.cashOut || 0) - (s.buyIn || 0)), 0),
+  }
+
+  const PAGES = { dashboard: Dashboard, manos: Manos, sesiones: Sesiones }
+  const PageComponent = PAGES[page]
+
+  if (!ready) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text3)' }}>Cargando…</span>
+      </div>
+    )
+  }
+
+  return (
+    <AppContext.Provider value={{ data, setData }}>
+      <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: 'var(--bg)' }}>
+        <Sidebar page={page} setPage={setPage} stats={stats} />
+        <main style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <PageComponent />
+        </main>
+      </div>
+    </AppContext.Provider>
+  )
+}
