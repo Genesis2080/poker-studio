@@ -2,6 +2,7 @@ import React, { useState, useEffect, createContext, useContext } from 'react'
 import Dashboard from './pages/Dashboard.jsx'
 import Manos     from './pages/Manos.jsx'
 import Sesiones  from './pages/Sesiones.jsx'
+import { APIKeyModal } from './components/AIAnalysis.jsx'
 
 /* ── Contexto global de datos ───────────────────────────── */
 export const AppContext = createContext(null)
@@ -63,6 +64,8 @@ function NavItem({ icon, label, active, onClick }) {
 
 /* ── Sidebar ──────────────────────────────────────────── */
 function Sidebar({ page, setPage, stats }) {
+  const [apiKeyOpen, setApiKeyOpen] = useState(false)
+
   const navItems = [
     { id: 'dashboard', icon: <IconGrid />,     label: 'Dashboard'  },
     { id: 'manos',     icon: <IconCards />,    label: 'Manos'      },
@@ -102,6 +105,16 @@ function Sidebar({ page, setPage, stats }) {
         {navItems.map(item => (
           <NavItem key={item.id} {...item} active={page === item.id} onClick={() => setPage(item.id)} />
         ))}
+
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px', margin: '16px 0 8px' }}>
+          Ajustes
+        </div>
+        <NavItem
+          icon={<span style={{ fontSize: '14px' }}>🤖</span>}
+          label="API Key IA"
+          active={false}
+          onClick={() => setApiKeyOpen(true)}
+        />
       </nav>
 
       {/* Footer stats */}
@@ -118,6 +131,8 @@ function Sidebar({ page, setPage, stats }) {
           valueColor={stats.netResult >= 0 ? 'var(--accent)' : 'var(--red)'}
         />
       </div>
+
+      <APIKeyModal open={apiKeyOpen} onClose={() => setApiKeyOpen(false)} />
     </aside>
   )
 }
