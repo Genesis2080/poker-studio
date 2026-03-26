@@ -1,7 +1,9 @@
 import React, { useState, useEffect, createContext, useContext } from 'react'
-import Dashboard from './pages/Dashboard.jsx'
-import Manos     from './pages/Manos.jsx'
-import Sesiones  from './pages/Sesiones.jsx'
+import Dashboard  from './pages/Dashboard.jsx'
+import Manos      from './pages/Manos.jsx'
+import Sesiones   from './pages/Sesiones.jsx'
+import Flashcards from './pages/Flashcards.jsx'
+import Analisis   from './pages/Analisis.jsx'
 import { APIKeyModal } from './components/AIAnalysis.jsx'
 
 /* ── Contexto global de datos ───────────────────────────── */
@@ -10,8 +12,13 @@ export const AppContext = createContext(null)
 export function useApp() { return useContext(AppContext) }
 
 const INITIAL_DATA = {
-  hands:    [],   // { id, date, position, result, notes, tags }
-  sessions: [],   // { id, date, duration, buyIn, cashOut, notes, location }
+  hands:         [],   // { id, date, position, result, amount, heroHand, villainRange, preflopAction, street, board, notes, tags, aiAnalysis, aiSuggest, aiErrors }
+  sessions:      [],   // { id, date, duration, buyIn, cashOut, notes, location }
+  flashcards:    {     // SM-2 state
+    cards: [],         // tarjetas personalizadas
+    sm2:   {},         // { [cardId]: { interval, repetitions, ef, dueDate, lastReview, history } }
+  },
+  historyReport: null, // informe cruzado de IA
 }
 
 /* ── Íconos SVG inline (sin dependencias) ─────────────── */
@@ -33,6 +40,18 @@ const IconCalendar = () => (
     <path d="M16 2v4M8 2v4M3 10h18"/>
   </svg>
 )
+const IconFlash = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+  </svg>
+)
+const IconBrain = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96-.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24A2.5 2.5 0 0 1 9.5 2"/>
+    <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2"/>
+  </svg>
+)
+
 const IconSpade = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8 6 3 8 3 12a4 4 0 0 0 7 2.6C9.5 16 9 18 8 20h8c-1-2-1.5-4-2-5.4A4 4 0 0 0 21 12c0-4-5-6-9-10z"/>
@@ -67,9 +86,11 @@ function Sidebar({ page, setPage, stats }) {
   const [apiKeyOpen, setApiKeyOpen] = useState(false)
 
   const navItems = [
-    { id: 'dashboard', icon: <IconGrid />,     label: 'Dashboard'  },
-    { id: 'manos',     icon: <IconCards />,    label: 'Manos'      },
-    { id: 'sesiones',  icon: <IconCalendar />, label: 'Sesiones'   },
+    { id: 'dashboard',  icon: <IconGrid />,     label: 'Dashboard'   },
+    { id: 'manos',      icon: <IconCards />,    label: 'Manos'       },
+    { id: 'sesiones',   icon: <IconCalendar />, label: 'Sesiones'    },
+    { id: 'flashcards', icon: <IconFlash />,    label: 'Flashcards'  },
+    { id: 'analisis',   icon: <IconBrain />,    label: 'Análisis IA' },
   ]
 
   return (
@@ -159,7 +180,16 @@ export default function App() {
         if (window.electronAPI) {
           const saved = await window.electronAPI.loadData()
           if (saved && typeof saved === 'object') {
-            setData({ ...INITIAL_DATA, ...saved })
+            setData({
+              ...INITIAL_DATA,
+              ...saved,
+              // deep merge flashcards para no perder el estado sm2
+              flashcards: {
+                ...INITIAL_DATA.flashcards,
+                ...(saved.flashcards || {}),
+                sm2: { ...(saved.flashcards?.sm2 || {}) },
+              },
+            })
           }
         }
       } catch (e) {
@@ -184,8 +214,14 @@ export default function App() {
     netResult: data.sessions.reduce((acc, s) => acc + ((s.cashOut || 0) - (s.buyIn || 0)), 0),
   }
 
-  const PAGES = { dashboard: Dashboard, manos: Manos, sesiones: Sesiones }
-  const PageComponent = PAGES[page]
+  const PAGES = {
+    dashboard:  Dashboard,
+    manos:      Manos,
+    sesiones:   Sesiones,
+    flashcards: Flashcards,
+    analisis:   Analisis,
+  }
+  const PageComponent = PAGES[page] || Dashboard
 
   if (!ready) {
     return (

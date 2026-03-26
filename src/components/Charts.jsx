@@ -287,6 +287,110 @@ export function ResultDistributionChart({ hands }) {
   )
 }
 
+// ── 6. Heatmap de rangos — grid 13×13 ──────────────────────────
+const RANKS_ORDER = ['A','K','Q','J','T','9','8','7','6','5','4','3','2']
+
+export function RangeHeatmapChart({ rangeData }) {
+  // rangeData: { 'AKs': { total: 5, wins: 3, losses: 2 }, ... }
+  const hasData = Object.keys(rangeData).length > 0
+
+  // Máximo total para normalizar opacidad
+  const maxTotal = Math.max(...Object.values(rangeData).map(d => d.total), 1)
+
+  return (
+    <div style={{
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius)', padding: '18px 20px',
+    }}>
+      <div style={{ marginBottom: '12px' }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+          Heatmap de rangos
+        </div>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)', marginTop: '2px', opacity: 0.6 }}>
+          Win rate por mano — diagonal superior = suited, inferior = offsuit
+        </div>
+      </div>
+
+      {!hasData ? (
+        <div style={{ height: 140, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+          <span style={{ fontSize: '22px', opacity: 0.3 }}>🃏</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text3)' }}>
+            Registra manos con Hero hand para ver el heatmap
+          </span>
+        </div>
+      ) : (
+        <>
+          {/* Header de columnas */}
+          <div style={{ display: 'grid', gridTemplateColumns: '14px repeat(13, 1fr)', gap: '2px', marginBottom: '2px' }}>
+            <div />
+            {RANKS_ORDER.map(r => (
+              <div key={r} style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text3)', textAlign: 'center' }}>{r}</div>
+            ))}
+          </div>
+
+          {/* Grid */}
+          {RANKS_ORDER.map((r1, i) => (
+            <div key={r1} style={{ display: 'grid', gridTemplateColumns: '14px repeat(13, 1fr)', gap: '2px', marginBottom: '2px' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '9px', color: 'var(--text3)', display: 'flex', alignItems: 'center' }}>{r1}</div>
+              {RANKS_ORDER.map((r2, j) => {
+                let key
+                if (i === j) key = r1 + r2
+                else if (i < j) key = r1 + r2 + 's'  // suited (upper triangle)
+                else key = r2 + r1 + 'o'               // offsuit (lower triangle)
+
+                const d = rangeData[key]
+                const wr = d ? d.wins / d.total : null
+                const opacity = d ? 0.3 + (d.total / maxTotal) * 0.7 : 0
+
+                // Color: verde si gana, rojo si pierde, gris si no hay datos
+                let bg = 'var(--border)'
+                if (d) bg = wr >= 0.5 ? `rgba(74,222,128,${opacity})` : `rgba(248,113,113,${opacity})`
+
+                return (
+                  <div
+                    key={r2}
+                    title={d ? `${key}: ${d.wins}/${d.total} (${Math.round(wr * 100)}%)` : key}
+                    style={{
+                      aspectRatio: '1', borderRadius: '2px',
+                      background: bg,
+                      cursor: d ? 'pointer' : 'default',
+                      transition: 'filter 0.1s',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                    onMouseEnter={e => { if (d) e.currentTarget.style.filter = 'brightness(1.3)' }}
+                    onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
+                  >
+                    {d && d.total >= 3 && (
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '7px', color: 'white', fontWeight: 700 }}>
+                        {Math.round(wr * 100)}
+                      </span>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          ))}
+
+          {/* Leyenda */}
+          <div style={{ display: 'flex', gap: '16px', marginTop: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ width: 10, height: 10, borderRadius: '2px', background: 'rgba(74,222,128,0.7)' }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)' }}>Win rate ≥50%</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <div style={{ width: 10, height: 10, borderRadius: '2px', background: 'rgba(248,113,113,0.7)' }} />
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)' }}>Win rate {'<'}50%</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)' }}>Intensidad = nº de manos</span>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ── Wrapper de tarjeta ───────────────────────────────────────────
 function ChartWrapper({ title, subtitle, empty, emptyMsg, children }) {
   return (
