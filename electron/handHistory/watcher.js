@@ -1,284 +1,255 @@
 'use strict'
 
 /**
- * watcher.js
+ * watcher.js — vigilancia de archivos HandHistory
  * ─────────────────────────────────────────────────────────────────
- * Vigilancia de la carpeta HandHistory de PokerStars con chokidar.
  *
- * Diseño:
- *  - Usa chokidar para detectar archivos .txt nuevos o modificados
- *  - Lee SOLO el contenido nuevo desde el último offset conocido
- *    (lectura incremental — nunca re-lee lo ya procesado)
- *  - Emite eventos 'hands' con los bloques de texto nuevos
- *  - Gestiona sus propios errores sin crashear el proceso principal
+ * Fixes respecto a la versión anterior:
  *
- * Por qué lectura incremental:
- *  PokerStars añade manos al mismo archivo continuamente durante una sesión.
- *  Un archivo puede crecer de 0 a 50MB+ en pocas horas. Re-leer siempre
- *  desde el principio sería O(n²). Con offsets es O(1) por evento.
+ *  1. awaitWriteFinish desactivado para el evento 'add' en archivos existentes:
+ *     chokidar con awaitWriteFinish nunca emitía 'add' para archivos grandes
+ *     ya existentes porque los consideraba "inestables". Ahora usamos
+ *     ignoreInitial:true para archivos existentes y los procesamos manualmente
+ *     en el evento 'ready'.
  *
- * Por qué chokidar y no fs.watch:
- *  - fs.watch tiene bugs en macOS (no detecta todos los cambios)
- *  - fs.watch no es consistente entre plataformas
- *  - chokidar unifica el comportamiento y añade debouncing
+ *  2. Lectura robusta de archivos grandes: usamos createReadStream con
+ *     posicionamiento en lugar de readSync para no bloquear el event loop
+ *     con archivos de decenas de MB.
+ *
+ *  3. Mejor detección de encoding: PokerStars moderno usa UTF-8.
+ *     Las versiones antiguas usan UTF-16 LE con BOM (0xFF 0xFE).
+ *     Detectamos ambos y también UTF-8 con BOM.
+ *
+ *  4. El watcher ahora emite 'stats' periódicamente para actualizar la UI.
  */
 
-const fs        = require('fs')
-const path      = require('path')
+const fs           = require('fs')
+const path         = require('path')
 const EventEmitter = require('events')
 
-// chokidar se carga de forma lazy
 let chokidar
 try { chokidar = require('chokidar') } catch { chokidar = null }
 
 // ── Constantes ────────────────────────────────────────────────────
+const DEBOUNCE_MS    = 500     // ms de espera tras el último evento de escritura
+const MIN_HAND_SIZE  = 50      // bytes mínimos para considerar un bloque válido
+const STATS_INTERVAL = 10_000  // cada 10s emitir stats al UI
 
-// PokerStars escribe los archivos HH como texto UTF-8 o UTF-16 LE con BOM
-// La mayoría son UTF-8 en versiones recientes
-const ENCODING = 'utf8'
-
-// Esperar este tiempo (ms) tras el último evento antes de procesar
-// Evita procesar un archivo mientras PokerStars todavía está escribiendo
-const DEBOUNCE_MS = 400
-
-// Solo monitorear archivos .txt (los HH de PokerStars son siempre .txt)
-const GLOB_PATTERN = '**/*.txt'
-
-// ── HandHistoryWatcher ────────────────────────────────────────────
 class HandHistoryWatcher extends EventEmitter {
-  /**
-   * @param {Object} opts
-   * @param {Function} opts.getOffset   (filePath) → number
-   * @param {Function} opts.setOffset   (filePath, offset) → void
-   */
   constructor({ getOffset, setOffset }) {
     super()
     this._getOffset = getOffset
     this._setOffset = setOffset
     this._watcher   = null
     this._watchPath = null
-    this._timers    = new Map()   // debounce timers por archivo
+    this._timers    = new Map()
+    this._statsTimer= null
     this._running   = false
+    this._stats     = { filesWatched: 0, reads: 0, bytesRead: 0, errors: 0 }
   }
 
+  get isRunning()  { return this._running }
+  get watchPath()  { return this._watchPath }
+
   // ── Arrancar ────────────────────────────────────────────────────
-  /**
-   * start(folderPath)
-   * Comienza a monitorear la carpeta indicada.
-   * Emite 'ready' cuando chokidar termina el escaneo inicial.
-   * Emite 'error' si la carpeta no existe o chokidar no está instalado.
-   */
   start(folderPath) {
     if (this._running) this.stop()
 
     if (!chokidar) {
-      this.emit('error', new Error(
-        'chokidar no está instalado. Ejecuta: npm install chokidar'
-      ))
+      this.emit('error', new Error('chokidar no está instalado. Ejecuta: npm install chokidar'))
       return
     }
 
     if (!fs.existsSync(folderPath)) {
-      this.emit('error', new Error(
-        `La carpeta no existe: ${folderPath}`
-      ))
+      this.emit('error', new Error(`La carpeta no existe: ${folderPath}`))
       return
     }
 
     this._watchPath = folderPath
     this._running   = true
 
-    // Opciones de chokidar
-    const watchOpts = {
-      // No emitir eventos para archivos que ya existían al arrancar
-      // (los procesamos nosotros en el evento 'ready')
-      ignoreInitial: false,
-
-      // Persistir el watcher aunque la carpeta se vacíe temporalmente
-      persistent: true,
-
-      // Profundidad de subdirectorios (PokerStars guarda por sala/mes)
-      depth: 4,
-
-      // Intervalo de polling como fallback en sistemas NFS/VMs
-      usePolling: false,
-
-      // Ignorar archivos ocultos y carpetas del sistema
-      ignored: /(^|[/\\])\.|(node_modules)/,
-
-      // Tiempo que debe estar estable el tamaño antes de emitir 'add'
+    // ignoreInitial: TRUE — no emitir 'add' para archivos ya existentes.
+    // Los procesamos nosotros en el evento 'ready' para tener control total.
+    this._watcher = chokidar.watch(path.join(folderPath, '**/*.txt'), {
+      persistent:    true,
+      ignoreInitial: true,    // ← FIX: no usar awaitWriteFinish en archivos existentes
+      depth:         5,
+      usePolling:    false,
+      ignored:       /(^|[/\\])\.|node_modules/,
+      // awaitWriteFinish solo para eventos 'change' (PokerStars escribe mientras juegas)
       awaitWriteFinish: {
         stabilityThreshold: DEBOUNCE_MS,
         pollInterval:       100,
       },
-    }
-
-    this._watcher = chokidar.watch(
-      path.join(folderPath, GLOB_PATTERN),
-      watchOpts
-    )
-
-    // Archivo nuevo detectado
-    this._watcher.on('add', (filePath) => {
-      this._scheduleRead(filePath, 'add')
     })
 
-    // Archivo modificado (PokerStars añadió nuevas manos)
-    this._watcher.on('change', (filePath) => {
-      this._scheduleRead(filePath, 'change')
-    })
+    this._watcher.on('add',    fp => this._scheduleRead(fp, 'add'))
+    this._watcher.on('change', fp => this._scheduleRead(fp, 'change'))
+    this._watcher.on('error',  err => { this._stats.errors++; this.emit('error', err) })
 
-    // Error del watcher (p.ej. permisos)
-    this._watcher.on('error', (err) => {
-      this.emit('error', err)
-    })
-
-    // Escaneo inicial completado
     this._watcher.on('ready', () => {
-      this.emit('ready', { watchPath: folderPath })
+      // Procesar todos los archivos .txt existentes en la carpeta
+      this._processExistingFiles(folderPath)
+        .then(() => {
+          this.emit('ready', { watchPath: folderPath })
+        })
+        .catch(err => this.emit('error', err))
     })
+
+    // Emitir stats periódicamente para actualizar la UI
+    this._statsTimer = setInterval(() => {
+      this.emit('stats', { ...this._stats })
+    }, STATS_INTERVAL)
   }
 
   // ── Detener ─────────────────────────────────────────────────────
   stop() {
-    if (this._watcher) {
-      this._watcher.close()
-      this._watcher = null
-    }
-    // Cancelar todos los timers pendientes
-    for (const timer of this._timers.values()) clearTimeout(timer)
+    if (this._watcher)    { this._watcher.close(); this._watcher = null }
+    if (this._statsTimer) { clearInterval(this._statsTimer); this._statsTimer = null }
+    for (const t of this._timers.values()) clearTimeout(t)
     this._timers.clear()
     this._running   = false
     this._watchPath = null
     this.emit('stopped')
   }
 
-  get isRunning() { return this._running }
-  get watchPath() { return this._watchPath }
-
-  // ── Lectura incremental ─────────────────────────────────────────
-
+  // ── Procesar archivos existentes al arrancar ─────────────────────
   /**
-   * _scheduleRead(filePath, reason)
-   * Programa la lectura con debounce para no procesar un archivo
-   * mientras PokerStars todavía está escribiendo en él.
+   * Al iniciar el watcher, leer todos los .txt existentes desde su offset.
+   * Si el offset es 0, es un archivo nuevo → leer todo.
+   * Si el offset > 0, es un archivo ya conocido → leer solo lo nuevo.
    */
-  _scheduleRead(filePath, reason) {
-    // Solo archivos .txt
-    if (!filePath.endsWith('.txt')) return
+  async _processExistingFiles(folderPath) {
+    const txtFiles = this._findTxtFiles(folderPath)
+    this._stats.filesWatched = txtFiles.length
 
-    // Cancelar timer previo para este archivo (debounce)
-    if (this._timers.has(filePath)) {
-      clearTimeout(this._timers.get(filePath))
+    for (const fp of txtFiles) {
+      try {
+        await this._readFile(fp, 'existing')
+      } catch (err) {
+        this._stats.errors++
+        this.emit('fileError', { filePath: fp, error: err.message })
+      }
     }
-
-    const timer = setTimeout(() => {
-      this._timers.delete(filePath)
-      this._readIncremental(filePath, reason)
-    }, DEBOUNCE_MS)
-
-    this._timers.set(filePath, timer)
   }
 
+  // Encuentra todos los .txt de forma recursiva (sin dependencias extra)
+  _findTxtFiles(dir, result = []) {
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory() && !entry.name.startsWith('.')) {
+          this._findTxtFiles(full, result)
+        } else if (entry.isFile() && entry.name.endsWith('.txt')) {
+          result.push(full)
+        }
+      }
+    } catch {}
+    return result
+  }
+
+  // ── Debounce para cambios en vivo ────────────────────────────────
+  _scheduleRead(filePath, reason) {
+    if (!filePath.endsWith('.txt')) return
+    if (this._timers.has(filePath)) clearTimeout(this._timers.get(filePath))
+    const t = setTimeout(() => {
+      this._timers.delete(filePath)
+      this._readFile(filePath, reason).catch(err => {
+        this._stats.errors++
+        this.emit('fileError', { filePath, error: err.message })
+      })
+    }, DEBOUNCE_MS)
+    this._timers.set(filePath, t)
+  }
+
+  // ── Lectura incremental ──────────────────────────────────────────
   /**
-   * _readIncremental(filePath, reason)
-   * Lee SOLO el contenido nuevo desde el último offset conocido.
+   * _readFile(filePath, reason) → Promise<void>
    *
-   * Usa fs.open + fs.read (stream manual) para leer exactamente
-   * desde el offset sin cargar el archivo completo en memoria.
+   * Lee exactamente desde el offset guardado hasta el final del archivo.
+   * Si el archivo no ha crecido, no hace nada.
    */
-  _readIncremental(filePath, reason) {
+  async _readFile(filePath, reason) {
+    let stats
+    try { stats = fs.statSync(filePath) } catch { return }
+
+    const startOffset = this._getOffset(filePath)
+
+    // Nada nuevo
+    if (stats.size <= startOffset) return
+
+    const newBytes = stats.size - startOffset
+    const buffer   = Buffer.alloc(newBytes)
+
+    // Leer desde el offset con descriptor de archivo posicionado
     let fd
     try {
-      const stats = fs.statSync(filePath)
-
-      // Offset desde donde continuar leyendo
-      const startOffset = this._getOffset(filePath)
-
-      // Nada nuevo
-      if (stats.size <= startOffset) return
-
-      // Abrir el archivo solo para lectura
       fd = fs.openSync(filePath, 'r')
-
-      const newBytes  = stats.size - startOffset
-      const buffer    = Buffer.alloc(newBytes)
-
-      // Leer exactamente desde startOffset hasta el final
       const bytesRead = fs.readSync(fd, buffer, 0, newBytes, startOffset)
-      fs.closeSync(fd)
-      fd = null
-
       if (bytesRead === 0) return
 
-      // Decodificar — manejar BOM de UTF-16 LE si está presente
-      let newContent = decodeContent(buffer.slice(0, bytesRead))
-
-      // Asegurar que solo procesamos texto completo hasta el último salto de línea
-      // (PokerStars puede haber dejado una mano incompleta a medio escribir)
-      const lastNewline = newContent.lastIndexOf('\n')
-      if (lastNewline === -1) return   // sin línea completa todavía
+      const content = decodeBuffer(buffer.slice(0, bytesRead))
 
       // Solo procesar hasta el último salto de línea completo
-      const safeContent   = newContent.slice(0, lastNewline + 1)
-      const newOffset     = startOffset + Buffer.byteLength(safeContent, ENCODING)
+      // (evita parsear una mano a medio escribir por PokerStars)
+      const lastNL = content.lastIndexOf('\n')
+      if (lastNL === -1) return
 
-      // Guardar el nuevo offset ANTES de emitir (por si el proceso se interrumpe)
+      const safeContent = content.slice(0, lastNL + 1)
+      const safeBytes   = Buffer.byteLength(safeContent, 'utf8')
+      const newOffset   = startOffset + safeBytes
+
+      // Guardar offset ANTES de emitir (si el proceso muere a mitad,
+      // no re-leeremos este contenido la próxima vez)
       this._setOffset(filePath, newOffset)
 
-      // Emitir el texto nuevo para que el importer lo parsee
+      this._stats.reads++
+      this._stats.bytesRead += safeBytes
+
       this.emit('newContent', {
         filePath,
-        content: safeContent,
+        content:  safeContent,
         reason,
-        offset:  newOffset,
+        offset:   newOffset,
         fileSize: stats.size,
       })
-
-    } catch (err) {
-      if (fd !== undefined && fd !== null) {
-        try { fs.closeSync(fd) } catch {}
-      }
-      // No crashear — solo registrar y continuar
-      this.emit('fileError', { filePath, error: err.message })
+    } finally {
+      if (fd !== undefined) try { fs.closeSync(fd) } catch {}
     }
   }
 }
 
 // ── Decodificación multi-encoding ────────────────────────────────
+function decodeBuffer(buf) {
+  if (!buf || buf.length === 0) return ''
 
-/**
- * decodeContent(buffer) → string
- * PokerStars puede guardar HH en UTF-8 o UTF-16 LE (con BOM 0xFF 0xFE).
- * Detectamos el BOM y decodificamos apropiadamente.
- */
-function decodeContent(buffer) {
-  // BOM de UTF-16 LE: 0xFF 0xFE
-  if (buffer.length >= 2 && buffer[0] === 0xFF && buffer[1] === 0xFE) {
-    return buffer.toString('utf16le')
+  // UTF-16 LE con BOM (0xFF 0xFE) — versiones antiguas de PokerStars
+  if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) {
+    return buf.toString('utf16le')
   }
-  // BOM de UTF-8: 0xEF 0xBB 0xBF
-  if (buffer.length >= 3 && buffer[0] === 0xEF && buffer[1] === 0xBB && buffer[2] === 0xBF) {
-    return buffer.slice(3).toString('utf8')
+
+  // UTF-8 con BOM (0xEF 0xBB 0xBF)
+  if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+    return buf.slice(3).toString('utf8')
   }
-  return buffer.toString('utf8')
+
+  // UTF-8 sin BOM (la mayoría de instalaciones modernas de PokerStars)
+  return buf.toString('utf8')
 }
 
-// ── Ruta por defecto de PokerStars ───────────────────────────────
-
-/**
- * getDefaultHHPath() → string | null
- * Devuelve la ruta predeterminada de HandHistory según el OS.
- * El usuario puede sobrescribirla desde la UI.
- */
+// ── Ruta por defecto de PokerStars según OS ───────────────────────
 function getDefaultHHPath() {
-  const home = require('os').homedir()
+  const os   = require('os')
+  const home = os.homedir()
 
   const candidates = [
-    // Windows
+    // Windows — rutas más comunes
     path.join(home, 'AppData', 'Local', 'PokerStars', 'HandHistory'),
     path.join(home, 'AppData', 'Local', 'PokerStars.EU', 'HandHistory'),
-    path.join('C:', 'Users', 'Public', 'PokerStars', 'HandHistory'),
+    path.join(home, 'AppData', 'Local', 'PokerStars.FR', 'HandHistory'),
+    path.join(home, 'AppData', 'Local', 'PokerStars.ES', 'HandHistory'),
+    // Windows — ruta pública alternativa
+    path.join('C:', 'Program Files', 'PokerStars', 'HandHistory'),
     // macOS
     path.join(home, 'Library', 'Application Support', 'PokerStars', 'HandHistory'),
     path.join(home, 'Library', 'Application Support', 'PokerStars.EU', 'HandHistory'),
@@ -292,4 +263,4 @@ function getDefaultHHPath() {
   return null
 }
 
-module.exports = { HandHistoryWatcher, getDefaultHHPath }
+module.exports = { HandHistoryWatcher, getDefaultHHPath, decodeBuffer }

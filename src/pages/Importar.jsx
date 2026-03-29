@@ -183,7 +183,6 @@ export default function Importar() {
       const res = await window.electronAPI.hhSyncToApp(500)
       if (res.ok) {
         if (res.added > 0) {
-          // Recargar data.json en el estado de React
           const freshData = await window.electronAPI.loadData()
           if (freshData) setData(prev => ({ ...prev, hands: freshData.hands || prev.hands }))
           addEvent('success', `${res.added} mano${res.added !== 1 ? 's' : ''} sincronizadas con la app`)
@@ -198,6 +197,37 @@ export default function Importar() {
       addEvent('error', `Error al sincronizar: ${e.message}`)
     } finally {
       setSyncing(false)
+    }
+  }
+
+  async function handleDebug() {
+    if (!hasElectron || !hhFolder) {
+      addEvent('error', 'Selecciona primero la carpeta HandHistory')
+      return
+    }
+    // Buscar el primer .txt en la carpeta para diagnosticarlo
+    try {
+      addEvent('info', `Analizando archivos en: ${hhFolder}`)
+      // Intentar con un archivo de muestra seleccionado por el usuario
+      const res = await window.electronAPI.hhBrowseFolder()
+      if (res.canceled) return
+      // El browse devuelve carpeta — buscar subcarpeta con txt
+      const result = await window.electronAPI.hhDebugFile
+        ? await window.electronAPI.hhDebugFile(res.folder)
+        : { ok: false, error: 'Diagnóstico no disponible en esta versión' }
+
+      if (result.ok) {
+        addEvent('success', `Archivo: ${result.fileSize} bytes · Encoding: ${result.encoding} · ${result.handsFound} manos encontradas`)
+        if (result.firstHand) {
+          addEvent('info', `Primera mano: ${result.firstHand.date} · ${result.firstHand.position} · ${result.firstHand.result} · ${result.firstHand.heroHand || 'sin cartas'}`)
+        } else if (result.handsFound === 0) {
+          addEvent('error', `No se encontraron manos. Muestra del archivo: ${result.rawSample?.slice(0,100)}`)
+        }
+      } else {
+        addEvent('error', `Diagnóstico: ${result.error}`)
+      }
+    } catch (e) {
+      addEvent('error', `Error diagnóstico: ${e.message}`)
     }
   }
 
@@ -231,9 +261,12 @@ export default function Importar() {
             <Button
               variant="secondary"
               onClick={handleSync}
-              disabled={syncing || !dbStats?.unsynced}
+              disabled={syncing}
             >
-              {syncing ? '⟳ Sincronizando…' : `↓ Sync a app ${dbStats?.unsynced ? `(${fmt(dbStats.unsynced)})` : ''}`}
+              {syncing ? '⟳ Sincronizando…' : `↓ Sync a app${dbStats?.unsynced ? ` (${fmt(dbStats.unsynced)})` : ''}`}
+            </Button>
+            <Button variant="secondary" onClick={handleDebug} title="Diagnóstico: analizar un archivo .txt">
+              🔍 Diagnóstico
             </Button>
           </div>
         }

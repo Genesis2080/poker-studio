@@ -1,384 +1,423 @@
 'use strict'
 
 /**
- * parser.js
+ * parser.js — PokerStars Hand History parser
  * ─────────────────────────────────────────────────────────────────
- * Extrae y normaliza manos individuales del formato de texto bruto
- * de PokerStars Hand History.
  *
- * Las manos en PokerStars siguen este patrón:
+ * Formatos de cabecera que soporta este parser:
  *
- *   PokerStars Hand #123456789:  Hold'em No Limit ($0.01/$0.02 USD)
- *   - 2024/01/15 21:30:00 CET [2024/01/15 15:30:00 ET]
- *   Table 'Acamar III' 6-max Seat #1 is the button
- *   Seat 1: Hero ($2.00 in chips)
- *   ...
- *   *** SUMMARY ***
- *   ...
- *   [línea en blanco]
+ * CASH GAME:
+ *   PokerStars Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
  *
- * El separador de manos es una línea que empieza por "PokerStars Hand #"
- * o "PokerStars Zoom Hand #".
+ * TORNEO (el que usa este usuario):
+ *   PokerStars Hand #260267741096: Tournament #3984919166, €4.50+€0.50 EUR Hold'em No Limit - Level I (25/50) - 2026/03/29 15:59:59 CET
+ *
+ * ZOOM:
+ *   PokerStars Zoom Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
+ *
+ * Diferencias del formato torneo vs cash:
+ *   - "Tournament #ID," antes del tipo de juego
+ *   - Buy-in: "€4.50+€0.50 EUR" (con símbolo de moneda, signo +, sin paréntesis)
+ *   - Blinds: "Level I (25/50)" — los blinds están en paréntesis al final
+ *   - Stacks: "(10000 in chips)" — SIN símbolo de moneda, CON espacio al final
+ *   - Puede haber "is sitting out" o "out of hand" al final de líneas de seat
  */
 
-// ── Regex de cabecera de mano ────────────────────────────────────
-// Captura: handId, gameType, smallBlind, bigBlind, currency, fecha ISO
-const HAND_HEADER_RE = /PokerStars (?:Zoom )?Hand #(\d+):\s+(.+?)\s+\([\$€]?(\d+(?:\.\d+)?)\/[\$€]?(\d+(?:\.\d+)?)\s*(\w+)?\)/
-
-// Fecha y hora: "2024/01/15 21:30:00 CET"
-const DATE_RE = /(\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2})/
-
-// Tabla y formato
-const TABLE_RE = /Table '([^']+)'\s+(\S+)/
-
-// Hero seat
-const HERO_SEAT_RE = /Seat \d+: (\S+) \([\$€]?([\d,.]+) in chips\)/g
-
-// Posición del botón
-const BUTTON_RE = /Seat #(\d+) is the button/
-
-// Cartas del héroe: "Dealt to Hero [Ah Ks]"
-const DEALT_RE = /Dealt to (\S+) \[([^\]]+)\]/
-
-// Resultado final de la mano para cada jugador
-// "Hero: shows [Ah Ks] (a flush, Ace high)" o "Hero collected $1.50 from pot"
-const COLLECTED_RE = /(\S+) collected [\$€]?([\d,.]+) from/g
-const SHOWS_RE     = /(\S+): shows \[([^\]]+)\]/g
-const MUCKS_RE     = /(\S+): mucks hand/g
-
-// Acciones resumidas en SUMMARY
-// "Seat 1: Hero (button) showed [Ah Ks] and won ($1.50) with a flush"
-const SUMMARY_SEAT_RE = /Seat \d+: (\S+) (?:\([^)]+\) )?(?:showed|mucked|folded)/g
-const SUMMARY_WON_RE  = /(\S+).+?(?:won|collected) \([\$€]?([\d,.]+)\)/
-
-// ── Dividir texto bruto en bloques de manos individuales ──────────
-/**
- * splitHands(rawText) → string[]
- *
- * Divide el texto en bloques individuales usando la cabecera de mano
- * como separador. Filtra bloques vacíos o demasiado cortos.
- */
-function splitHands(rawText) {
-  // Separador: inicio de línea con "PokerStars Hand #" o "PokerStars Zoom Hand #"
-  const parts = rawText.split(/(?=PokerStars (?:Zoom )?Hand #\d+)/)
-  return parts
-    .map(p => p.trim())
-    .filter(p => p.length > 50 && /PokerStars (?:Zoom )?Hand #\d+/.test(p))
+// ── Normalización ──────────────────────────────────────────────────
+// CRÍTICO: archivos de Windows tienen \r\n — normalizar antes de cualquier regex
+function normalize(text) {
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
 
-// ── Extraer el ID único de una mano ──────────────────────────────
+// ── Identificador de cabecera de mano ─────────────────────────────
+// Soporta Hand, Zoom Hand, y cualquier variante con Tournament
+const HAND_START_RE = /^PokerStars (?:Zoom )?Hand #\d+/m
+
+/**
+ * splitHands(rawText) → string[]
+ */
+function splitHands(rawText) {
+  const text  = normalize(rawText)
+  const parts = text.split(/(?=^PokerStars (?:Zoom )?Hand #\d+)/m)
+  return parts
+    .map(p => p.trim())
+    .filter(p => p.length > 30 && HAND_START_RE.test(p))
+}
+
+/**
+ * extractHandId(block) → string | null
+ */
 function extractHandId(block) {
-  const m = block.match(/PokerStars (?:Zoom )?Hand #(\d+)/)
+  const text = normalize(block)
+  const m    = text.match(/PokerStars (?:Zoom )?Hand #(\d+)/)
   return m ? m[1] : null
 }
 
-// ── Parsear una mano individual ───────────────────────────────────
 /**
  * parseHand(block) → HandObject | null
- *
- * Retorna un objeto normalizado compatible con el schema de la app:
- * {
- *   id, date, position, result, heroHand, villainRange,
- *   preflopAction, street, board, notes, tags,
- *   // campos adicionales del import:
- *   handId, gameType, stakes, tableName, tableFormat,
- *   heroName, heroStack, potSize, rake, rawText
- * }
  */
 function parseHand(block) {
   try {
-    const handId = extractHandId(block)
+    const text   = normalize(block)
+    const handId = extractHandId(text)
     if (!handId) return null
 
-    // ── Cabecera ─────────────────────────────────────────────────
-    const headerM = block.match(HAND_HEADER_RE)
-    const gameType = headerM ? headerM[2].trim() : 'Unknown'
-    const smallBlind = headerM ? parseFloat(headerM[3]) : 0
-    const bigBlind   = headerM ? parseFloat(headerM[4]) : 0
-    const currency   = headerM ? (headerM[5] || 'USD') : 'USD'
+    const lines   = text.split('\n')
+    const header  = lines[0]  // primera línea completa
+
+    // ── Detectar si es torneo ────────────────────────────────────
+    const isTournament = /Tournament #\d+/.test(header)
+    const tournamentId = isTournament
+      ? (header.match(/Tournament #(\d+)/) || [])[1] || ''
+      : ''
+
+    // ── Tipo de juego ────────────────────────────────────────────
+    // Cash:    "Hold'em No Limit ($0.01/$0.02 USD)"
+    // Torneo:  "€4.50+€0.50 EUR Hold'em No Limit - Level I (25/50)"
+    const gameType = extractGameType(header)
+
+    // ── Stakes ───────────────────────────────────────────────────
+    // Cash:    "$0.01/$0.02 USD"
+    // Torneo:  "€4.50+€0.50 EUR" + nivel "Level I (25/50)"
+    const stakes = extractStakes(header, isTournament)
+
+    // ── Blinds actuales ──────────────────────────────────────────
+    // Torneo: "Level I (25/50)" → 25/50
+    // Cash:   dentro del paréntesis principal
+    const blinds = extractBlinds(header, isTournament)
 
     // ── Fecha ────────────────────────────────────────────────────
-    const dateM = block.match(DATE_RE)
-    const date  = dateM
-      ? dateM[1].replace(/\//g, '-').split(' ')[0]  // "2024-01-15"
-      : new Date().toISOString().split('T')[0]
+    const date = extractDate(header)
 
     // ── Tabla ────────────────────────────────────────────────────
-    const tableM    = block.match(TABLE_RE)
-    const tableName  = tableM ? tableM[1] : 'Unknown'
-    const tableFormat= tableM ? tableM[2] : 'Unknown'  // "6-max", "9-max", etc.
+    // "Table '3984919166 10' 9-max Seat #1 is the button"
+    const tableLine   = lines.find(l => l.startsWith("Table '")) || ''
+    const tableM      = tableLine.match(/Table '([^']+)'\s+(\S+(?:-max)?)\s+Seat #(\d+) is the button/)
+    const tableName   = tableM ? tableM[1] : ''
+    const tableFormat = tableM ? tableM[2] : ''
+    const buttonSeat  = tableM ? parseInt(tableM[3]) : null
 
-    // ── Botón y asientos ─────────────────────────────────────────
-    const buttonM = block.match(BUTTON_RE)
-    const buttonSeat = buttonM ? parseInt(buttonM[1]) : null
-
-    // Extraer todos los jugadores con sus stacks
+    // ── Jugadores y stacks ───────────────────────────────────────
+    // Formato torneo:  "Seat 1: babar59680 (10000 in chips) "  ← trailing space
+    // Formato cash:    "Seat 1: Hero ($200.00 in chips)"
+    // También puede:   "Seat 1: Hero (10000 in chips) is sitting out"
+    //
+    // Regex permisivo: acepta con o sin símbolo de moneda, con trailing space
+    // y con cualquier texto adicional después del paréntesis
     const players = {}
-    let seatMatch
-    const seatRe = /Seat (\d+): (\S+) \([\$€]?([\d,.]+) in chips\)/g
-    while ((seatMatch = seatRe.exec(block)) !== null) {
-      players[parseInt(seatMatch[1])] = {
-        name:  seatMatch[2],
-        stack: parseFloat(seatMatch[3].replace(',', '')),
+    const seatRe  = /^Seat (\d+): ([^\s(]+)\s*\([\$€£]?([\d,]+(?:\.\d+)?)\s*in chips\)/gm
+    let seatM
+    while ((seatM = seatRe.exec(text)) !== null) {
+      players[parseInt(seatM[1])] = {
+        name:  seatM[2].trim(),
+        stack: parseFloat(seatM[3].replace(/,/g, '')),
       }
     }
-
     const totalPlayers = Object.keys(players).length
 
-    // ── Héroe: cartas y nombre ───────────────────────────────────
-    const dealtM = block.match(DEALT_RE)
-    const heroName = dealtM ? dealtM[1] : null
-    const heroCards= dealtM ? dealtM[2] : null  // "Ah Ks"
+    // ── Héroe ────────────────────────────────────────────────────
+    // "Dealt to NombreHero [Ah Ks]"
+    const dealtM    = text.match(/Dealt to ([^\s[]+)\s*\[([^\]]+)\]/)
+    const heroName  = dealtM ? dealtM[1].trim() : null
+    const heroCards = dealtM ? dealtM[2].trim() : null
+    const heroHand  = heroCards ? normalizeHoleCards(heroCards) : ''
 
-    // Convertir cartas a formato canónico de la app: "AKs" o "AKo"
-    const heroHand = heroCards ? normalizeHoleCards(heroCards) : ''
-
-    // ── Posición del héroe ────────────────────────────────────────
-    // Determinar la posición del héroe según su seat y el botón
+    // ── Posición ─────────────────────────────────────────────────
     let heroSeat = null
     for (const [seat, p] of Object.entries(players)) {
       if (p.name === heroName) { heroSeat = parseInt(seat); break }
     }
-    const position = derivePosition(heroSeat, buttonSeat, totalPlayers, players)
+    const position  = derivePosition(heroSeat, buttonSeat, players)
+    const heroStack = heroSeat && players[heroSeat] ? players[heroSeat].stack : 0
 
-    const heroStack = heroSeat && players[heroSeat]
-      ? players[heroSeat].stack
-      : 0
+    // ── Acción preflop ───────────────────────────────────────────
+    const preflopAction = detectPreflopAction(text, heroName)
 
-    // ── Acción preflop del héroe ──────────────────────────────────
-    const preflopAction = detectPreflopAction(block, heroName)
+    // ── Board ────────────────────────────────────────────────────
+    const board  = extractBoard(text)
+    const street = detectDecisiveStreet(text)
 
-    // ── Board ─────────────────────────────────────────────────────
-    const board = extractBoard(block)
+    // ── Resultado ────────────────────────────────────────────────
+    const { result, potWon } = detectResult(text, heroName)
 
-    // ── Calle decisiva ────────────────────────────────────────────
-    const street = detectDecisiveStreet(block)
+    // ── Bote y rake ──────────────────────────────────────────────
+    const potInfo = extractPotInfo(text)
 
-    // ── Resultado ─────────────────────────────────────────────────
-    const { result, potWon } = detectResult(block, heroName)
+    // ── Tags ─────────────────────────────────────────────────────
+    const tags = autoTags(text, heroName, preflopAction, result, isTournament)
 
-    // ── Tamaño del bote y rake ────────────────────────────────────
-    const potInfo = extractPotInfo(block)
-
-    // ── Tags automáticos ──────────────────────────────────────────
-    const tags = autoTags(block, heroName, preflopAction, result)
-
-    // ── Notas (resumen de la mano para la IA) ─────────────────────
+    // ── Notas automáticas ────────────────────────────────────────
     const notes = buildAutoNotes({
       heroName, heroCards, position, preflopAction,
       board, street, result, potWon,
-      tableFormat, totalPlayers,
+      tableFormat, totalPlayers, stakes, blinds, isTournament,
     })
 
     return {
-      // Schema de la app
-      id:            'ps-' + handId,
+      // ── Campos del schema de la app ──────────────────────────
+      id:              'ps-' + handId,
       date,
-      position:      position || 'BTN',
+      position:        position || 'BTN',
       result,
       heroHand,
-      villainRange:  '',
-      villainRangeKeys: [],
-      preflopAction: preflopAction || '',
-      street:        street || '',
+      villainRange:    '',
+      villainRangeKeys:[],
+      preflopAction:   preflopAction || '',
+      street:          street || '',
       board,
       notes,
       tags,
-      // Campos adicionales del import
+      // ── Metadatos del import ─────────────────────────────────
       handId,
+      tournamentId,
+      isTournament,
       gameType,
-      stakes:        `${currency} ${smallBlind}/${bigBlind}`,
+      stakes,
+      blinds,
       tableName,
       tableFormat,
-      heroName:      heroName || '',
+      heroName:        heroName || '',
       heroStack,
-      potSize:       potInfo.total,
-      rake:          potInfo.rake,
+      potSize:         potInfo.total,
+      rake:            potInfo.rake,
       potWon,
-      importedAt:    Date.now(),
-      source:        'pokerstars',
-      rawText:       block,   // guardamos el texto original para re-análisis
+      importedAt:      Date.now(),
+      source:          'pokerstars',
+      rawText:         block,
     }
+
   } catch (err) {
-    console.error('[parser] Error parsing hand:', err.message)
+    console.warn('[parser] Error parseando mano:', err.message)
     return null
   }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════
+// HELPERS DE EXTRACCIÓN
+// ══════════════════════════════════════════════════════════════════
 
 /**
- * Convierte "Ah Ks" → "AKs" o "AKo"
- * Convierte "Ah As" → "AA"
+ * Extrae el tipo de juego de la cabecera.
+ *
+ * Cash:    "PokerStars Hand #ID:  Hold'em No Limit ($0.01/$0.02 USD) - DATE"
+ * Torneo:  "PokerStars Hand #ID: Tournament #ID, €4.50+€0.50 EUR Hold'em No Limit - Level I (25/50) - DATE"
+ *
+ * Buscamos la primera aparición de los tipos de juego conocidos.
  */
-function normalizeHoleCards(cards) {
-  const parts = cards.trim().split(/\s+/)
-  if (parts.length !== 2) return cards
-
-  const rankOf  = c => c[0].toUpperCase().replace('T', 'T')
-  const suitOf  = c => c[1].toLowerCase()
-  const ORDER   = 'AKQJT98765432'
-
-  const [c1, c2]   = parts
-  const r1 = rankOf(c1), r2 = rankOf(c2)
-  const s1 = suitOf(c1), s2 = suitOf(c2)
-
-  if (r1 === r2) return r1 + r2   // par
-
-  const i1 = ORDER.indexOf(r1), i2 = ORDER.indexOf(r2)
-  const [hi, lo] = i1 < i2 ? [r1, r2] : [r2, r1]
-  const suited    = s1 === s2 ? 's' : 'o'
-
-  return hi + lo + suited
+function extractGameType(header) {
+  // Orden de búsqueda: más específicos primero
+  const types = [
+    "Hold'em No Limit",
+    "Hold'em Pot Limit",
+    "Hold'em Limit",
+    'Omaha Pot Limit',
+    'Omaha Hi/Lo Pot Limit',
+    '5 Card Omaha',
+    'Badugi',
+    '7 Card Stud',
+    'Razz',
+    'HORSE',
+  ]
+  for (const t of types) {
+    if (header.includes(t)) return t
+  }
+  return "Hold'em No Limit"  // fallback seguro
 }
 
 /**
- * Infiere la posición según número de seat, seat del botón y total de jugadores
+ * Extrae los stakes.
+ *
+ * Cash:    "$0.01/$0.02 USD"   (dentro del primer paréntesis)
+ * Torneo:  "€4.50+€0.50 EUR"  (antes del tipo de juego)
  */
-function derivePosition(heroSeat, buttonSeat, totalPlayers, players) {
-  if (!heroSeat || !buttonSeat || !totalPlayers) return ''
+function extractStakes(header, isTournament) {
+  if (isTournament) {
+    // "Tournament #ID, €4.50+€0.50 EUR Hold'em..."
+    // o sin símbolo: "Tournament #ID, 4.50+0.50 Hold'em..."
+    const m = header.match(/Tournament #\d+,\s*([\$€£]?[\d.]+\+[\$€£]?[\d.]+(?:\s*\w+)?)/)
+    return m ? m[1].trim() : ''
+  }
+  // Cash: primer par de paréntesis con /
+  const m = header.match(/\(([\$€£]?[\d,]+(?:\.\d+)?\/[\$€£]?[\d,]+(?:\.\d+)?(?:\s+\w+)?)\)/)
+  return m ? m[1].trim() : ''
+}
 
-  const seats = Object.keys(players).map(Number).sort((a, b) => a - b)
-  const n     = seats.length
+/**
+ * Extrae los blinds actuales.
+ *
+ * Cash:    de los stakes "$0.01/$0.02" → "0.01/0.02"
+ * Torneo:  "Level I (25/50)" → "25/50"
+ */
+function extractBlinds(header, isTournament) {
+  if (isTournament) {
+    // "Level I (25/50)" — el paréntesis justo antes del guion de fecha
+    const m = header.match(/Level [IVXLCDM\d]+\s*\(([\d,]+\/[\d,]+)\)/)
+    return m ? m[1] : ''
+  }
+  const m = header.match(/([\d,]+(?:\.\d+)?\/([\d,]+(?:\.\d+)?))/)
+  return m ? m[1] : ''
+}
 
-  // Índice del héroe y del botón en el array de seats ordenados
+/**
+ * Extrae la fecha.
+ * Busca el patrón "YYYY/MM/DD" en cualquier parte de la cabecera.
+ */
+function extractDate(header) {
+  const m = header.match(/(\d{4})\/(\d{2})\/(\d{2})/)
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : new Date().toISOString().split('T')[0]
+}
+
+/**
+ * Convierte "Ah Ks" → "AKs", "Ah As" → "AA", "Td 9d" → "T9s"
+ */
+function normalizeHoleCards(cards) {
+  const parts = cards.trim().split(/\s+/)
+  if (parts.length !== 2) return cards.replace(/\s+/g, '')
+
+  const ORDER = 'AKQJT98765432'
+  const rank  = c => c[0].toUpperCase()
+  const suit  = c => c.slice(1).toLowerCase()
+
+  const r1 = rank(parts[0]), r2 = rank(parts[1])
+  const s1 = suit(parts[0]), s2 = suit(parts[1])
+
+  if (r1 === r2) return r1 + r2
+
+  const i1 = ORDER.indexOf(r1), i2 = ORDER.indexOf(r2)
+  const [hi, lo] = i1 <= i2 ? [r1, r2] : [r2, r1]
+  return hi + lo + (s1 === s2 ? 's' : 'o')
+}
+
+/**
+ * Calcula la posición del héroe en la mesa (BTN, SB, BB, UTG, HJ, CO).
+ */
+function derivePosition(heroSeat, buttonSeat, players) {
+  if (!heroSeat || !buttonSeat) return ''
+
+  const seats   = Object.keys(players).map(Number).sort((a, b) => a - b)
+  const n       = seats.length
   const btnIdx  = seats.indexOf(buttonSeat)
   const heroIdx = seats.indexOf(heroSeat)
 
   if (btnIdx === -1 || heroIdx === -1) return ''
 
-  // Distancia del héroe al botón en sentido horario
-  // 0 = BTN, 1 = SB (después del BTN), 2 = BB ...
-  // Pero las posiciones preflop son: BTN actúa último → queda al final
-  // El orden de acción preflop es: UTG → ... → CO → BTN → SB → BB
-  // Así que mapeamos por la posición relativa al BTN
+  // Distancia en sentido horario desde el botón (0 = BTN)
+  const dist = (heroIdx - btnIdx + n) % n
 
-  const dist = (heroIdx - btnIdx + n) % n   // 0=BTN, 1=SB, 2=BB, 3=UTG3, etc.
+  const maps = {
+    2: { 0:'BTN', 1:'BB' },
+    3: { 0:'BTN', 1:'SB', 2:'BB' },
+    4: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG' },
+    5: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'CO' },
+    6: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'HJ', 5:'CO' },
+    7: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'UTG', 5:'HJ', 6:'CO' },
+    8: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'UTG', 5:'UTG', 6:'HJ', 7:'CO' },
+    9: { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'UTG', 5:'UTG', 6:'HJ', 7:'CO', 8:'CO' },
+  }
 
-  if (n <= 3) {
-    const map3 = { 0:'BTN', 1:'SB', 2:'BB' }
-    return map3[dist] || 'BTN'
-  }
-  if (n === 4) {
-    const map4 = { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG' }
-    return map4[dist] || ''
-  }
-  if (n === 5) {
-    const map5 = { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'CO' }
-    return map5[dist] || ''
-  }
-  if (n === 6) {
-    const map6 = { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'HJ', 5:'CO' }
-    return map6[dist] || ''
-  }
-  // 7-9 jugadores
-  const mapFull = { 0:'BTN', 1:'SB', 2:'BB', 3:'UTG', 4:'UTG', 5:'UTG', 6:'HJ', 7:'CO', 8:'CO' }
-  return mapFull[dist] || ''
+  return (maps[n] || maps[9])[dist] || ''
 }
 
 /**
- * Detecta la primera acción significativa del héroe en preflop:
- * open, 3bet, 4bet, call, limp
+ * Detecta la acción preflop del héroe: open | 3bet | 4bet | call | limp
  */
-function detectPreflopAction(block, heroName) {
+function detectPreflopAction(text, heroName) {
   if (!heroName) return ''
 
-  // Extraer solo la sección preflop (entre inicio y *** FLOP ***)
-  const preflopSection = block.split(/\*\*\* FLOP \*\*\*/)[0]
+  // Sección preflop: desde *** HOLE CARDS *** hasta *** FLOP *** (o fin)
+  const hcIdx    = text.indexOf('*** HOLE CARDS ***')
+  const flopIdx  = text.indexOf('*** FLOP ***')
+  const end      = flopIdx !== -1 ? flopIdx : text.length
+  const preflop  = text.slice(hcIdx !== -1 ? hcIdx : 0, end)
 
-  // Escapar caracteres especiales del nombre para usarlo en regex
-  const escaped = heroName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const esc = escRe(heroName)
 
-  // Detectar 4-bet (raise tras un 3-bet)
-  const raises = [...preflopSection.matchAll(new RegExp(`${escaped}: raises`, 'g'))]
-  if (raises.length >= 2) return '4bet'
+  // Contar raises del héroe en preflop
+  const heroRaises = [...preflop.matchAll(new RegExp(`^${esc}: raises`, 'gm'))]
 
-  // Detectar 3-bet (primer raise del héroe cuando ya había una subida)
-  if (raises.length === 1) {
-    // ¿Hubo una apuesta/raise antes que la del héroe?
-    const heroRaiseIdx = preflopSection.indexOf(heroName + ': raises')
-    const prevAction   = preflopSection.slice(0, heroRaiseIdx)
-    if (/raises|bets/.test(prevAction)) return '3bet'
-    return 'open'
+  if (heroRaises.length >= 2) return '4bet'
+
+  if (heroRaises.length === 1) {
+    const idx    = preflop.indexOf(heroName + ': raises')
+    const before = preflop.slice(0, idx)
+    return /raises|bets/.test(before) ? '3bet' : 'open'
   }
 
-  // Detectar open raise sin 3-bet previo
-  if (new RegExp(`${escaped}: raises`).test(preflopSection)) return 'open'
-
-  // Detectar call
-  if (new RegExp(`${escaped}: calls`).test(preflopSection)) return 'call'
-
-  // Detectar limp (check en BB o call de BB sin raise)
-  if (new RegExp(`${escaped}: checks`).test(preflopSection)) return 'limp'
+  if (new RegExp(`^${esc}: calls`, 'm').test(preflop))  return 'call'
+  if (new RegExp(`^${esc}: checks`, 'm').test(preflop)) return 'limp'
 
   return ''
 }
 
 /**
- * Extrae el board completo (flop, turn, river) como string legible
- * Formato: "Ah Ks 7c · Td · 2h"
+ * Extrae el board: "Ah Ks 7c · Td · 2h"
  */
-function extractBoard(block) {
+function extractBoard(text) {
   const parts = []
 
-  const flopM = block.match(/\*\*\* FLOP \*\*\* \[([^\]]+)\]/)
-  if (flopM) parts.push(flopM[1])
+  // Flop: "*** FLOP *** [Ah Ks 7c]"  o  "*** FLOP *** [Ah Ks 7c] [Td]" (run it twice)
+  const flopM = text.match(/\*\*\* FLOP \*\*\*[^\[]*\[([^\]]+)\]/)
+  if (flopM) parts.push(flopM[1].trim())
 
-  const turnM = block.match(/\*\*\* TURN \*\*\* \[[^\]]+\] \[([^\]]+)\]/)
-  if (turnM) parts.push(turnM[1])
+  // Turn: segundo par de corchetes después de TURN
+  const turnM = text.match(/\*\*\* TURN \*\*\*[^\[]*\[[^\]]+\]\s*\[([^\]]+)\]/)
+  if (turnM) parts.push(turnM[1].trim())
 
-  const riverM = block.match(/\*\*\* RIVER \*\*\* \[[^\]]+\] \[([^\]]+)\]/)
-  if (riverM) parts.push(riverM[1])
+  // River: segundo par de corchetes después de RIVER
+  const riverM = text.match(/\*\*\* RIVER \*\*\*[^\[]*\[[^\]]+\]\s*\[([^\]]+)\]/)
+  if (riverM) parts.push(riverM[1].trim())
 
   return parts.join(' · ')
 }
 
-/**
- * Detecta la calle más profunda jugada (donde terminó la mano)
- */
-function detectDecisiveStreet(block) {
-  if (/\*\*\* RIVER \*\*\*/.test(block))  return 'river'
-  if (/\*\*\* TURN \*\*\*/.test(block))   return 'turn'
-  if (/\*\*\* FLOP \*\*\*/.test(block))   return 'flop'
+function detectDecisiveStreet(text) {
+  if (/\*\*\* RIVER \*\*\*/.test(text)) return 'river'
+  if (/\*\*\* TURN \*\*\*/.test(text))  return 'turn'
+  if (/\*\*\* FLOP \*\*\*/.test(text))  return 'flop'
   return 'preflop'
 }
 
 /**
- * Detecta si el héroe ganó, perdió o quedó break-even
- * También retorna cuánto ganó/perdió
+ * Detecta resultado del héroe (win / loss / even) y cuánto ganó.
+ *
+ * PokerStars usa:
+ *   "[nombre] collected [X] from [main/side] pot"  — en el cuerpo
+ *   "Seat N: [nombre] ... won ([X]) with ..."       — en el SUMMARY
+ *   "Seat N: [nombre] collected ([X])"              — en el SUMMARY (torneo)
  */
-function detectResult(block, heroName) {
+function detectResult(text, heroName) {
   if (!heroName) return { result: 'even', potWon: 0 }
 
-  const escaped = heroName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const esc = escRe(heroName)
 
-  // ¿Colectó el bote?
-  const collectedRe = new RegExp(`${escaped} collected [\\$€]?([\\d,.]+)`)
-  const collectedM  = block.match(collectedRe)
-  if (collectedM) {
-    return {
-      result: 'win',
-      potWon: parseFloat(collectedM[1].replace(',', '')),
-    }
+  // 1. "collected X from pot" (cash + torneo)
+  const collRe = new RegExp(`\\b${esc}\\b collected ([\\$€£]?[\\d,]+(?:\\.\\d+)?)`)
+  const collM  = text.match(collRe)
+  if (collM) {
+    return { result: 'win', potWon: parseFloat(collM[1].replace(/[€$£,]/g, '')) }
   }
 
-  // ¿Ganó en el summary?
-  const summaryWonRe = new RegExp(`${escaped}[^\\n]+(?:won|collected) \\([\\$€]?([\\d,.]+)\\)`)
-  const summaryWonM  = block.match(summaryWonRe)
-  if (summaryWonM) {
-    return {
-      result: 'win',
-      potWon: parseFloat(summaryWonM[1].replace(',', '')),
-    }
+  // 2. SUMMARY "won (X)"
+  const wonRe = new RegExp(`\\b${esc}\\b[^\\n]* won \\([\\$€£]?([\\d,]+(?:\\.\\d+)?)\\)`)
+  const wonM  = text.match(wonRe)
+  if (wonM) {
+    return { result: 'win', potWon: parseFloat(wonM[1].replace(/,/g, '')) }
   }
 
-  // ¿Perdió (foldó y otro ganó)?
-  if (new RegExp(`${escaped}: folds`).test(block)) {
+  // 3. SUMMARY "collected (X)" — torneos
+  const sumCollRe = new RegExp(`\\b${esc}\\b[^\\n]* collected \\([\\$€£]?([\\d,]+(?:\\.\\d+)?)\\)`)
+  const sumCollM  = text.match(sumCollRe)
+  if (sumCollM) {
+    return { result: 'win', potWon: parseFloat(sumCollM[1].replace(/,/g, '')) }
+  }
+
+  // 4. Foldó → pérdida
+  if (new RegExp(`^${esc}: folds`, 'm').test(text)) {
     return { result: 'loss', potWon: 0 }
   }
 
-  // Si llegó a showdown y otro ganó
-  if (/\*\*\* SHOW DOWN \*\*\*/.test(block)) {
+  // 5. Llegó a showdown sin ganar → pérdida
+  if (/\*\*\* SHOW DOWN \*\*\*/.test(text)) {
     return { result: 'loss', potWon: 0 }
   }
 
@@ -386,65 +425,84 @@ function detectResult(block, heroName) {
 }
 
 /**
- * Extrae el tamaño total del bote y el rake del SUMMARY
+ * Extrae tamaño del bote y rake del SUMMARY.
+ * Torneo: "Total pot 1300 | Rake 0"
+ * Cash:   "Total pot $1.50 | Rake $0.07"
  */
-function extractPotInfo(block) {
-  // "Total pot $1.50 | Rake $0.07"
-  const m = block.match(/Total pot [\$€]?([\d,.]+)(?:\s*\|\s*Rake\s*[\$€]?([\d,.]+))?/)
+function extractPotInfo(text) {
+  const m = text.match(/Total pot\s+[\$€£]?([\d,]+(?:\.\d+)?)(?:[^|\n]*\|\s*Rake\s+[\$€£]?([\d,]+(?:\.\d+)?))?/)
   return {
-    total: m ? parseFloat(m[1].replace(',', '')) : 0,
-    rake:  m && m[2] ? parseFloat(m[2].replace(',', '')) : 0,
+    total: m ? parseFloat(m[1].replace(/,/g, '')) : 0,
+    rake:  m && m[2] ? parseFloat(m[2].replace(/,/g, '')) : 0,
   }
 }
 
-/**
- * Genera tags automáticos basados en el contenido de la mano
- */
-function autoTags(block, heroName, preflopAction, result) {
+function autoTags(text, heroName, preflopAction, result, isTournament) {
   const tags = []
   if (!heroName) return tags
 
-  const escaped = heroName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const esc = escRe(heroName)
 
-  // Llegó a showdown
-  if (/\*\*\* SHOW DOWN \*\*\*/.test(block)) tags.push('Showdown')
-
-  // Fue all-in
-  if (new RegExp(`${escaped}.+all-in`).test(block)) tags.push('All-in')
-
-  // 3-bet pot
+  if (/\*\*\* SHOW DOWN \*\*\*/.test(text))               tags.push('Showdown')
+  if (new RegExp(`\\b${esc}\\b[^\\n]* all-in`, 'm').test(text)) tags.push('All-in')
   if (preflopAction === '3bet' || preflopAction === '4bet') tags.push('3-bet pot')
+  if (isTournament)                                        tags.push('Torneo')
 
-  // Multiway (3+ jugadores con fichas en el flop)
-  const flopSection = block.split(/\*\*\* FLOP \*\*\*/)[1] || ''
-  const actorsInFlop = new Set(flopSection.match(/^(\S+):/gm) || []).size
-  if (actorsInFlop >= 3) tags.push('Multiway')
-
-  // Bluff (foldó el rival tras una gran apuesta del héroe sin showdown)
-  if (result === 'win' && !/\*\*\* SHOW DOWN \*\*\*/.test(block)) {
-    tags.push('Bluff')
+  // Multiway en el flop
+  const flopIdx = text.indexOf('*** FLOP ***')
+  const turnIdx = text.indexOf('*** TURN ***')
+  if (flopIdx !== -1) {
+    const flopSec = text.slice(flopIdx, turnIdx !== -1 ? turnIdx : text.length)
+    const actors  = new Set((flopSec.match(/^[^:]+:/gm) || []).map(s => s.trim()))
+    if (actors.size >= 3) tags.push('Multiway')
   }
+
+  if (result === 'win' && !/\*\*\* SHOW DOWN \*\*\*/.test(text)) tags.push('Bluff')
 
   return tags
 }
 
-/**
- * Construye unas notas automáticas legibles para la IA
- */
 function buildAutoNotes({ heroName, heroCards, position, preflopAction,
                           board, street, result, potWon,
-                          tableFormat, totalPlayers }) {
-  const lines = []
-  if (heroName)      lines.push(`Jugador: ${heroName}`)
-  if (heroCards)     lines.push(`Cartas: [${heroCards}]`)
-  if (position)      lines.push(`Posición: ${position}`)
-  if (preflopAction) lines.push(`Acción preflop: ${preflopAction}`)
-  if (board)         lines.push(`Board: ${board}`)
-  if (street)        lines.push(`Calle final: ${street}`)
-  lines.push(`Resultado: ${result}${potWon ? ` (+${potWon})` : ''}`)
-  lines.push(`Mesa: ${tableFormat || ''} (${totalPlayers} jugadores)`)
-  return lines.join(' | ')
+                          tableFormat, totalPlayers, stakes, blinds, isTournament }) {
+  const parts = []
+  if (heroName)      parts.push(`Jugador: ${heroName}`)
+  if (heroCards)     parts.push(`Cartas: [${heroCards}]`)
+  if (position)      parts.push(`Posición: ${position}`)
+  if (preflopAction) parts.push(`Preflop: ${preflopAction}`)
+  if (board)         parts.push(`Board: ${board}`)
+  if (street)        parts.push(`Calle final: ${street}`)
+  if (stakes)        parts.push(`Stakes: ${stakes}`)
+  if (blinds)        parts.push(`Blinds: ${blinds}`)
+  parts.push(`Resultado: ${result}${potWon ? ` (+${potWon})` : ''}`)
+  parts.push(`Mesa: ${tableFormat || ''} ${totalPlayers}max${isTournament ? ' (torneo)' : ''}`)
+  return parts.join(' | ')
+}
+
+// ── Helpers internos ──────────────────────────────────────────────
+function escRe(str) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// ── Diagnóstico (para usar desde DevTools de Electron) ────────────
+function debugHand(rawText) {
+  const text   = normalize(rawText)
+  const blocks = splitHands(rawText)
+
+  console.log(`[parser debug] Bloques encontrados: ${blocks.length}`)
+
+  if (!blocks.length) {
+    console.log('[parser debug] Primeros 300 chars:', JSON.stringify(text.slice(0, 300)))
+    console.log('[parser debug] ¿Contiene cabecera?', HAND_START_RE.test(text))
+    // Buscar si hay cabecera con \r\n sin normalizar
+    console.log('[parser debug] ¿Tiene \\r\\n?', rawText.includes('\r\n'))
+    return { blocks: 0, rawSample: text.slice(0, 300) }
+  }
+
+  const first = parseHand(blocks[0])
+  console.log('[parser debug] Primera mano:', first)
+  return { blocks: blocks.length, firstHand: first, rawBlock: blocks[0].slice(0, 500) }
 }
 
 // ── API pública ───────────────────────────────────────────────────
-module.exports = { splitHands, parseHand, extractHandId }
+module.exports = { splitHands, parseHand, extractHandId, debugHand, normalize }

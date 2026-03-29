@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   hhBrowseFolder:   ()       => ipcRenderer.invoke('hh:browse-folder'),
   hhSetFolder:      (folder) => ipcRenderer.invoke('hh:set-folder', folder),
 
+  // Diagnóstico: parsear un archivo .txt manualmente
+  hhDebugFile:      (fp)   => ipcRenderer.invoke('hh:debug-file', fp),
+
   // Sincronización: traer manos de SQLite → data.json
   hhSyncToApp:      (limit)  => ipcRenderer.invoke('hh:sync-to-app', limit),
 

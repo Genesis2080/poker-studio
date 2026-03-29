@@ -187,6 +187,32 @@ ipcMain.handle('hh:get-config', () => {
   }
 })
 
+// Canal de diagnóstico: parsear un archivo manualmente y devolver resultado
+ipcMain.handle('hh:debug-file', async (_, filePath) => {
+  try {
+    const { splitHands, parseHand, debugHand } = require('./handHistory/parser')
+    const { decodeBuffer } = require('./handHistory/watcher')
+
+    if (!fs.existsSync(filePath)) return { ok: false, error: 'El archivo no existe' }
+
+    const raw      = fs.readFileSync(filePath)
+    const content  = decodeBuffer(raw)
+    const blocks   = splitHands(content)
+    const sample   = blocks[0] ? parseHand(blocks[0]) : null
+
+    return {
+      ok:          true,
+      fileSize:    raw.length,
+      encoding:    raw[0] === 0xFF ? 'UTF-16 LE' : raw[0] === 0xEF ? 'UTF-8 BOM' : 'UTF-8',
+      handsFound:  blocks.length,
+      firstHand:   sample,
+      rawSample:   content.slice(0, 400),
+    }
+  } catch (err) {
+    return { ok: false, error: err.message }
+  }
+})
+
 // ── Ventana principal ──────────────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
