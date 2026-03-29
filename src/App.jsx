@@ -4,6 +4,7 @@ import Manos      from './pages/Manos.jsx'
 import Sesiones   from './pages/Sesiones.jsx'
 import Flashcards from './pages/Flashcards.jsx'
 import Analisis   from './pages/Analisis.jsx'
+import Importar   from './pages/Importar.jsx'
 import { APIKeyModal } from './components/AIAnalysis.jsx'
 
 /* ── Contexto global de datos ───────────────────────────── */
@@ -52,6 +53,14 @@ const IconBrain = () => (
   </svg>
 )
 
+const IconImport = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+    <polyline points="7 10 12 15 17 10"/>
+    <line x1="12" y1="15" x2="12" y2="3"/>
+  </svg>
+)
+
 const IconSpade = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8 6 3 8 3 12a4 4 0 0 0 7 2.6C9.5 16 9 18 8 20h8c-1-2-1.5-4-2-5.4A4 4 0 0 0 21 12c0-4-5-6-9-10z"/>
@@ -91,6 +100,7 @@ function Sidebar({ page, setPage, stats }) {
     { id: 'sesiones',   icon: <IconCalendar />, label: 'Sesiones'    },
     { id: 'flashcards', icon: <IconFlash />,    label: 'Flashcards'  },
     { id: 'analisis',   icon: <IconBrain />,    label: 'Análisis IA' },
+    { id: 'importar',   icon: <IconImport />,   label: 'Importar'    },
   ]
 
   return (
@@ -220,6 +230,7 @@ export default function App() {
     sesiones:   Sesiones,
     flashcards: Flashcards,
     analisis:   Analisis,
+    importar:   Importar,
   }
   const PageComponent = PAGES[page] || Dashboard
 
