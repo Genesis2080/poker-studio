@@ -5,6 +5,7 @@ import Sesiones   from './pages/Sesiones.jsx'
 import Flashcards from './pages/Flashcards.jsx'
 import Analisis   from './pages/Analisis.jsx'
 import Importar   from './pages/Importar.jsx'
+import StudyPlan  from './pages/StudyPlan.jsx'
 import { APIKeyModal } from './components/AIAnalysis.jsx'
 
 /* ── Contexto global de datos ───────────────────────────── */
@@ -20,6 +21,7 @@ const INITIAL_DATA = {
     sm2:   {},         // { [cardId]: { interval, repetitions, ef, dueDate, lastReview, history } }
   },
   historyReport: null, // informe cruzado de IA
+  studyPlan:     null, // plan de estudios con checkboxes
 }
 
 /* ── Íconos SVG inline (sin dependencias) ─────────────── */
@@ -61,6 +63,13 @@ const IconImport = () => (
   </svg>
 )
 
+const IconBook = () => (
+  <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+  </svg>
+)
+
 const IconSpade = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8 6 3 8 3 12a4 4 0 0 0 7 2.6C9.5 16 9 18 8 20h8c-1-2-1.5-4-2-5.4A4 4 0 0 0 21 12c0-4-5-6-9-10z"/>
@@ -99,6 +108,7 @@ function Sidebar({ page, setPage, stats }) {
     { id: 'manos',      icon: <IconCards />,    label: 'Manos'       },
     { id: 'sesiones',   icon: <IconCalendar />, label: 'Sesiones'    },
     { id: 'flashcards', icon: <IconFlash />,    label: 'Flashcards'  },
+    { id: 'studyplan',  icon: <IconBook />,    label: 'Plan estudios' },
     { id: 'analisis',   icon: <IconBrain />,    label: 'Análisis IA' },
     { id: 'importar',   icon: <IconImport />,   label: 'Importar'    },
   ]
@@ -193,7 +203,6 @@ export default function App() {
             setData({
               ...INITIAL_DATA,
               ...saved,
-              // deep merge flashcards para no perder el estado sm2
               flashcards: {
                 ...INITIAL_DATA.flashcards,
                 ...(saved.flashcards || {}),
@@ -229,6 +238,7 @@ export default function App() {
     manos:      Manos,
     sesiones:   Sesiones,
     flashcards: Flashcards,
+    studyplan:  StudyPlan,
     analisis:   Analisis,
     importar:   Importar,
   }
