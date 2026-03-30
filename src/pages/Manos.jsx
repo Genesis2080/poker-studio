@@ -29,18 +29,38 @@ function boardStr(cards) {
 const RANKS = ['A','K','Q','J','T','9','8','7','6','5','4','3','2']
 const ORDER = 'AKQJT98765432'
 
-// Genera la key canónica de cada celda de la grid 13×13
-// diagonal → pares (AA, KK…)
-// triángulo superior (i<j) → suited (AKs, AQs…)
-// triángulo inferior (i>j) → offsuit (AKo, AQo…)
-function cellKey(i, j) {
-  const r1 = RANKS[i], r2 = RANKS[j]
-  if (i === j)  return r1 + r2          // par
-  if (i < j)    return r1 + r2 + 's'   // suited  (superior)
-  return r2 + r1 + 'o'                  // offsuit (inferior)
+// ════════════════════════════════════════════════════════
+// FUERZA DE MANO PREFLOP (Orden por Carta Alta -> Kicker)
+// ════════════════════════════════════════════════════════
+// A=14, K=13, Q=12, J=11, T=10, 9=9 ... 2=2
+const RANK_VAL = { A:14, K:13, Q:12, J:11, T:10, '9':9, '8':8, '7':7, '6':6, '5':5, '4':4, '3':3, '2':2 }
+
+function handStrength(heroHand) {
+  if (!heroHand) return -Infinity
+  const h = heroHand.trim()
+  if (!h || h.length < 2) return -Infinity
+
+  const r1 = RANK_VAL[h[0]]
+  const r2 = RANK_VAL[h[1]]
+  if (!r1 || !r2) return -Infinity
+
+  const hi = Math.max(r1, r2)
+  const lo = Math.min(r1, r2)
+
+  const isSuited = h.length === 3 && h[2] === 's'
+  
+  // Multiplicador masivo para la carta alta (1000), menor para el kicker (10)
+  // +1 punto extra si es suited para desempatar (ej: AKs > AKo)
+  return (hi * 1000) + (lo * 10) + (isSuited ? 1 : 0)
 }
 
-// Genera TODAS las combinaciones posibles (169 keys)
+function cellKey(i, j) {
+  const r1 = RANKS[i], r2 = RANKS[j]
+  if (i === j)  return r1 + r2
+  if (i < j)    return r1 + r2 + 's'
+  return r2 + r1 + 'o'
+}
+
 function allRangeKeys() {
   const keys = []
   for (let i = 0; i < 13; i++)
@@ -49,11 +69,8 @@ function allRangeKeys() {
   return [...new Set(keys)]
 }
 
-const ALL_KEYS = allRangeKeys()   // 169 keys únicas
+const ALL_KEYS = allRangeKeys()
 
-// Serializa el array de keys a string legible para la IA
-// ["AA","KK","AKs","AKo"] → "AA, KK, AKs, AKo"
-// Si hay demasiadas manos se resume: "Rango amplio (120/169 combos)"
 function serializeRange(keys) {
   if (!keys?.length) return ''
   if (keys.length === ALL_KEYS.length) return 'Todas las manos (rango completo)'
@@ -61,63 +78,32 @@ function serializeRange(keys) {
   return keys.slice().sort().join(', ')
 }
 
-// Grupos de selección rápida
 const RANGE_GROUPS = [
-  {
-    label: 'Premium',
-    color: '#c9a84c',
-    keys: () => ['AA','KK','QQ','JJ','AKs','AKo'],
-  },
-  {
-    label: 'Broadways',
-    color: '#60a5fa',
-    keys: () => {
+  { label: 'Premium', color: '#c9a84c', keys: () => ['AA','KK','QQ','JJ','AKs','AKo'] },
+  { label: 'Broadways', color: '#60a5fa', keys: () => {
       const out = []
       const bw = ['A','K','Q','J','T']
       for (let i=0;i<bw.length;i++) for (let j=i+1;j<bw.length;j++) {
         out.push(bw[i]+bw[j]+'s', bw[i]+bw[j]+'o')
       }
-      // Pares altos
       out.push('TT','JJ','QQ','KK','AA')
       return [...new Set(out)]
-    },
+    }
   },
-  {
-    label: 'Pares',
-    color: '#a78bfa',
-    keys: () => RANKS.map(r => r+r),
-  },
-  {
-    label: 'Suited Aces',
-    color: '#4ade80',
-    keys: () => RANKS.slice(1).map(r => 'A'+r+'s'),
-  },
-  {
-    label: 'Suited Connectors',
-    color: '#fb923c',
-    keys: () => {
+  { label: 'Pares', color: '#a78bfa', keys: () => RANKS.map(r => r+r) },
+  { label: 'Suited Aces', color: '#4ade80', keys: () => RANKS.slice(1).map(r => 'A'+r+'s') },
+  { label: 'Suited Connectors', color: '#fb923c', keys: () => {
       const out = []
       for (let i=1;i<RANKS.length;i++) out.push(RANKS[i-1]+RANKS[i]+'s')
       return out
-    },
+    }
   },
-  {
-    label: 'Todas',
-    color: '#94a3b8',
-    keys: () => ALL_KEYS,
-  },
-  {
-    label: 'Ninguna',
-    color: '#4a5568',
-    keys: () => [],
-  },
+  { label: 'Todas', color: '#94a3b8', keys: () => ALL_KEYS },
+  { label: 'Ninguna', color: '#4a5568', keys: () => [] },
 ]
 
 // ════════════════════════════════════════════════════════
 // VillainRangePicker
-// Props:
-//   selected  → array de keys seleccionadas (vacío = nada)
-//   onChange  → fn(newArray)
 // ════════════════════════════════════════════════════════
 function VillainRangePicker({ selected = [], onChange }) {
   const selectedSet = useMemo(() => new Set(selected), [selected])
@@ -133,17 +119,14 @@ function VillainRangePicker({ selected = [], onChange }) {
     onChange(groupFn())
   }
 
-  // Añadir / quitar grupo a la selección actual
   function toggleGroup(groupFn) {
     const groupKeys = groupFn()
     const allIn = groupKeys.every(k => selectedSet.has(k))
     if (allIn) {
-      // Quitar todo el grupo
       const next = new Set(selectedSet)
       groupKeys.forEach(k => next.delete(k))
       onChange([...next])
     } else {
-      // Añadir todo el grupo
       const next = new Set(selectedSet)
       groupKeys.forEach(k => next.add(k))
       onChange([...next])
@@ -153,43 +136,30 @@ function VillainRangePicker({ selected = [], onChange }) {
   const total = selected.length
   const pct   = ((total / ALL_KEYS.length) * 100).toFixed(1)
 
-  // Colores de celda según tipo y estado
   function cellStyle(i, j) {
     const key      = cellKey(i, j)
     const isSel    = selectedSet.has(key)
     const isPair   = i === j
     const isSuited = i < j
 
-    // Color base según tipo cuando está seleccionado
-    let selBg = '#2a3a2a'  // offsuit seleccionado — verde oscuro neutro
-    if (isPair)   selBg = 'rgba(167,139,250,0.55)'  // pares — púrpura
-    if (isSuited) selBg = 'rgba(74,222,128,0.45)'   // suited — verde
+    let selBg = '#2a3a2a'
+    if (isPair)   selBg = 'rgba(167,139,250,0.55)'
+    if (isSuited) selBg = 'rgba(74,222,128,0.45)'
 
     return {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       height: 26, borderRadius: 4, cursor: 'pointer',
       fontFamily: 'var(--font-mono)', fontSize: '10px', fontWeight: 600,
       transition: 'all 0.08s',
-      background: isSel
-        ? selBg
-        : isPair
-          ? 'rgba(167,139,250,0.08)'
-          : isSuited
-            ? 'rgba(74,222,128,0.06)'
-            : 'rgba(96,165,250,0.05)',
-      border: isSel
-        ? `1px solid ${isPair ? 'rgba(167,139,250,0.6)' : isSuited ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.3)'}`
-        : '1px solid var(--border)',
-      color: isSel
-        ? (isPair ? '#d8b4fe' : '#fff')
-        : 'var(--text3)',
+      background: isSel ? selBg : isPair ? 'rgba(167,139,250,0.08)' : isSuited ? 'rgba(74,222,128,0.06)' : 'rgba(96,165,250,0.05)',
+      border: isSel ? `1px solid ${isPair ? 'rgba(167,139,250,0.6)' : isSuited ? 'rgba(74,222,128,0.5)' : 'rgba(74,222,128,0.3)'}` : '1px solid var(--border)',
+      color: isSel ? (isPair ? '#d8b4fe' : '#fff') : 'var(--text3)',
       transform: isSel ? 'scale(1.04)' : 'scale(1)',
     }
   }
 
   return (
     <div>
-      {/* Header: label + contador + grupos rápidos */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
         <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>
           Rango del villano
@@ -197,41 +167,29 @@ function VillainRangePicker({ selected = [], onChange }) {
             {total > 0 ? `${total} combos · ${pct}%` : 'vacío'}
           </span>
         </div>
-        <button
-          onClick={() => onChange(total > 0 ? [] : [...ALL_KEYS])}
-          style={{ background:'none', border:'none', color:'var(--text3)', cursor:'pointer', fontFamily:'var(--font-mono)', fontSize:10, padding:'2px 6px' }}
-        >
+        <button onClick={() => onChange(total > 0 ? [] : [...ALL_KEYS])} style={{ background:'none', border:'none', color:'var(--text3)', cursor:'pointer', fontFamily:'var(--font-mono)', fontSize:10, padding:'2px 6px' }}>
           {total > 0 ? '✕ Limpiar' : '+ Todo'}
         </button>
       </div>
 
-      {/* Botones de grupos rápidos */}
       <div style={{ display:'flex', flexWrap:'wrap', gap:5, marginBottom:12 }}>
         {RANGE_GROUPS.map(g => {
           const gKeys  = g.keys()
           const allIn  = gKeys.length > 0 && gKeys.every(k => selectedSet.has(k))
           return (
-            <button
-              key={g.label}
-              onClick={() => {
-                if (g.label === 'Todas' || g.label === 'Ninguna') applyGroup(g.keys)
-                else toggleGroup(g.keys)
-              }}
+            <button key={g.label} onClick={() => { if (g.label === 'Todas' || g.label === 'Ninguna') applyGroup(g.keys); else toggleGroup(g.keys) }}
               style={{
-                fontFamily:'var(--font-mono)', fontSize:10, padding:'3px 9px',
-                borderRadius:20, cursor:'pointer', transition:'all 0.15s',
+                fontFamily:'var(--font-mono)', fontSize:10, padding:'3px 9px', borderRadius:20, cursor:'pointer', transition:'all 0.15s',
                 background: allIn ? `${g.color}22` : 'var(--surface2)',
                 border: `1px solid ${allIn ? g.color : 'var(--border)'}`,
                 color: allIn ? g.color : 'var(--text2)',
-              }}
-            >
+              }}>
               {g.label}
             </button>
           )
         })}
       </div>
 
-      {/* Leyenda */}
       <div style={{ display:'flex', gap:14, marginBottom:8, flexWrap:'wrap' }}>
         {[
           { label:'Suited (↗)', color:'rgba(74,222,128,0.5)'  },
@@ -245,37 +203,20 @@ function VillainRangePicker({ selected = [], onChange }) {
         ))}
       </div>
 
-      {/* Grid 13×13 */}
-      <div style={{
-        background:'var(--bg2)', border:'1px solid var(--border)',
-        borderRadius:8, padding:'10px 12px', overflowX:'auto',
-      }}>
-        {/* Header de columnas */}
+      <div style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, padding:'10px 12px', overflowX:'auto' }}>
         <div style={{ display:'grid', gridTemplateColumns:'20px repeat(13,1fr)', gap:3, marginBottom:3 }}>
           <div />
-          {RANKS.map(r => (
-            <div key={r} style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', fontWeight:700 }}>{r}</div>
-          ))}
+          {RANKS.map(r => <div key={r} style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', fontWeight:700 }}>{r}</div>)}
         </div>
-
-        {/* Filas */}
         {RANKS.map((r1, i) => (
           <div key={r1} style={{ display:'grid', gridTemplateColumns:'20px repeat(13,1fr)', gap:3, marginBottom:3 }}>
-            {/* Label de fila */}
             <div style={{ display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', fontWeight:700 }}>{r1}</div>
-
-            {/* Celdas */}
             {RANKS.map((r2, j) => {
               const key = cellKey(i, j)
               return (
-                <div
-                  key={key}
-                  onClick={() => toggle(key)}
-                  title={key}
-                  style={cellStyle(i, j)}
+                <div key={key} onClick={() => toggle(key)} title={key} style={cellStyle(i, j)}
                   onMouseEnter={e => { e.currentTarget.style.filter = 'brightness(1.2)' }}
-                  onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}
-                >
+                  onMouseLeave={e => { e.currentTarget.style.filter = 'none' }}>
                   {key.replace('s','').replace('o','')}
                 </div>
               )
@@ -284,27 +225,15 @@ function VillainRangePicker({ selected = [], onChange }) {
         ))}
       </div>
 
-      {/* Footer: resumen del rango */}
       {selected.length > 0 && selected.length < ALL_KEYS.length && (
-        <div style={{
-          marginTop:8, padding:'6px 10px',
-          background:'var(--surface2)', border:'1px solid var(--border)',
-          borderRadius:6, fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)',
-          maxHeight:60, overflowY:'auto', lineHeight:1.8,
-        }}>
-          {selected.length <= 30
-            ? selected.sort().join(' · ')
-            : `${selected.slice(0,30).sort().join(' · ')} … (+${selected.length-30} más)`
-          }
+        <div style={{ marginTop:8, padding:'6px 10px', background:'var(--surface2)', border:'1px solid var(--border)', borderRadius:6, fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', maxHeight:60, overflowY:'auto', lineHeight:1.8 }}>
+          {selected.length <= 30 ? selected.sort().join(' · ') : `${selected.slice(0,30).sort().join(' · ')} … (+${selected.length-30} más)`}
         </div>
       )}
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════
-// CardChip  (para BoardPreview y CardPicker)
-// ════════════════════════════════════════════════════════
 function CardChip({ cid }) {
   const suit = CARD_SUITS.find(s => s.id === cid?.slice(-1))
   const rank = cid?.slice(0,-1)
@@ -316,9 +245,6 @@ function CardChip({ cid }) {
   )
 }
 
-// ════════════════════════════════════════════════════════
-// CardPicker  (para Flop/Turn/River)
-// ════════════════════════════════════════════════════════
 function CardPicker({ label, max, selected=[], onChange, blocked=[], accentColor='var(--accent)' }) {
   const [open, setOpen] = useState(false)
 
@@ -346,29 +272,16 @@ function CardPicker({ label, max, selected=[], onChange, blocked=[], accentColor
         )}
       </div>
 
-      <div onClick={()=>setOpen(o=>!o)} style={{
-        display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', minHeight:38, padding:'6px 10px',
-        background:'var(--surface)', border:`1px solid ${open?accentColor:'var(--border2)'}`,
-        borderRadius:open?'7px 7px 0 0':'7px', cursor:'pointer', transition:'border-color 0.15s',
-      }}>
-        {isEmpty
-          ? <span style={{ fontFamily:'var(--font-mono)', fontSize:12, color:'var(--text3)' }}>
-              {open ? 'Selecciona cartas ↑' : `Seleccionar ${max} carta${max>1?'s':''} →`}
-            </span>
-          : selected.map(cid => <CardChip key={cid} cid={cid}/>)
-        }
-        {!isEmpty && !isFull && (
-          <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', marginLeft:4 }}>+{remaining} más</span>
-        )}
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', minHeight:38, padding:'6px 10px', background:'var(--surface)', border:`1px solid ${open?accentColor:'var(--border2)'}`, borderRadius:open?'7px 7px 0 0':'7px', cursor:'pointer', transition:'border-color 0.15s' }}>
+        {isEmpty ? <span style={{ fontFamily:'var(--font-mono)', fontSize:12, color:'var(--text3)' }}>{open ? 'Selecciona cartas ↑' : `Seleccionar ${max} carta${max>1?'s':''} →`}</span> : selected.map(cid => <CardChip key={cid} cid={cid}/>)}
+        {!isEmpty && !isFull && <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', marginLeft:4 }}>+{remaining} más</span>}
       </div>
 
       {open && (
         <div style={{ border:`1px solid ${accentColor}`, borderTop:'none', borderRadius:'0 0 7px 7px', background:'var(--bg2)', overflow:'hidden' }}>
           <div style={{ display:'grid', gridTemplateColumns:'28px repeat(13,1fr)', gap:3, padding:'8px 10px 4px', borderBottom:'1px solid var(--border)' }}>
             <div/>
-            {CARD_RANKS.map(r => (
-              <div key={r} style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', fontWeight:600 }}>{r}</div>
-            ))}
+            {CARD_RANKS.map(r => <div key={r} style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', fontWeight:600 }}>{r}</div>)}
           </div>
           {CARD_SUITS.map(suit => (
             <div key={suit.id} style={{ display:'grid', gridTemplateColumns:'28px repeat(13,1fr)', gap:3, padding:'4px 10px' }}>
@@ -380,14 +293,10 @@ function CardPicker({ label, max, selected=[], onChange, blocked=[], accentColor
                 const isDisabled = isBlocked || (isFull && !isSelected)
                 return (
                   <div key={cid} onClick={()=>!isDisabled&&toggle(cid)} title={isBlocked?'Carta ya usada':cardLabel(cid)} style={{
-                    height:30, display:'flex', alignItems:'center', justifyContent:'center',
-                    borderRadius:5, cursor:isDisabled?'not-allowed':'pointer', transition:'all 0.1s',
-                    fontFamily:'var(--font-mono)', fontSize:11, fontWeight:700,
+                    height:30, display:'flex', alignItems:'center', justifyContent:'center', borderRadius:5, cursor:isDisabled?'not-allowed':'pointer', transition:'all 0.1s', fontFamily:'var(--font-mono)', fontSize:11, fontWeight:700,
                     background:isSelected?accentColor:isBlocked?'rgba(255,255,255,0.03)':'var(--surface)',
                     border:`1px solid ${isSelected?accentColor:isBlocked?'transparent':'var(--border)'}`,
-                    color:isSelected?'#0d1a0d':isBlocked?'var(--border2)':suit.color,
-                    opacity:isBlocked?0.3:1,
-                    transform:isSelected?'scale(1.06)':'scale(1)',
+                    color:isSelected?'#0d1a0d':isBlocked?'var(--border2)':suit.color, opacity:isBlocked?0.3:1, transform:isSelected?'scale(1.06)':'scale(1)'
                   }}>
                     {rank}
                   </div>
@@ -397,11 +306,7 @@ function CardPicker({ label, max, selected=[], onChange, blocked=[], accentColor
           ))}
           <div style={{ padding:'6px 10px 8px', borderTop:'1px solid var(--border)', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
             <span>{isFull ? `✓ ${max} carta${max>1?'s':''} lista${max>1?'s':''}` : `Selecciona ${remaining} carta${remaining>1?'s':''} más`}</span>
-            {isFull && (
-              <button onClick={()=>setOpen(false)} style={{ background:accentColor, border:'none', borderRadius:5, color:'#0d1a0d', fontFamily:'var(--font-mono)', fontSize:10, fontWeight:700, padding:'3px 10px', cursor:'pointer' }}>
-                Cerrar ✓
-              </button>
-            )}
+            {isFull && <button onClick={()=>setOpen(false)} style={{ background:accentColor, border:'none', borderRadius:5, color:'#0d1a0d', fontFamily:'var(--font-mono)', fontSize:10, fontWeight:700, padding:'3px 10px', cursor:'pointer' }}>Cerrar ✓</button>}
           </div>
         </div>
       )}
@@ -409,9 +314,6 @@ function CardPicker({ label, max, selected=[], onChange, blocked=[], accentColor
   )
 }
 
-// ════════════════════════════════════════════════════════
-// BoardPreview
-// ════════════════════════════════════════════════════════
 function BoardPreview({ flop, turn, river }) {
   if (!flop?.length && !turn && !river) return null
   return (
@@ -441,9 +343,6 @@ function BoardPreview({ flop, turn, river }) {
   )
 }
 
-// ════════════════════════════════════════════════════════
-// HeroHandInput
-// ════════════════════════════════════════════════════════
 function HeroHandInput({ value, onChange }) {
   const [r1, setR1] = useState('')
   const [r2, setR2] = useState('')
@@ -460,9 +359,7 @@ function HeroHandInput({ value, onChange }) {
   const rs = (r,sel) => ({
     width:28, height:28, display:'flex', alignItems:'center', justifyContent:'center',
     borderRadius:5, cursor:'pointer', transition:'all 0.1s', fontFamily:'var(--font-mono)', fontSize:12,
-    background:sel?'var(--accent)':'var(--surface)',
-    border:`1px solid ${sel?'var(--accent)':'var(--border)'}`,
-    color:sel?'#0d1a0d':'var(--text2)',
+    background:sel?'var(--accent)':'var(--surface)', border:`1px solid ${sel?'var(--accent)':'var(--border)'}`, color:sel?'#0d1a0d':'var(--text2)'
   })
 
   return (
@@ -484,27 +381,19 @@ function HeroHandInput({ value, onChange }) {
             {[['s','Suited'],['o','Offsuit']].map(([v,l])=>(
               <button key={v} onClick={()=>{setS(v==='s');build(r1,r2,v==='s')}} style={{
                 padding:'3px 10px', borderRadius:5, cursor:'pointer', transition:'all 0.1s', fontFamily:'var(--font-mono)', fontSize:11,
-                background:(v==='s')===s?'rgba(74,222,128,0.12)':'var(--surface2)',
-                border:`1px solid ${(v==='s')===s?'rgba(74,222,128,0.3)':'var(--border)'}`,
-                color:(v==='s')===s?'var(--accent)':'var(--text2)',
+                background:(v==='s')===s?'rgba(74,222,128,0.12)':'var(--surface2)', border:`1px solid ${(v==='s')===s?'rgba(74,222,128,0.3)':'var(--border)'}`, color:(v==='s')===s?'var(--accent)':'var(--text2)'
               }}>{l}</button>
             ))}
           </div>
         )}
-        <input value={value} onChange={e=>{onChange(e.target.value);setR1('');setR2('')}}
-          placeholder="O escribe: AKs, QJo, 99…"
+        <input value={value} onChange={e=>{onChange(e.target.value);setR1('');setR2('')}} placeholder="O escribe: AKs, QJo, 99…"
           style={{ background:'var(--surface)', border:'1px solid var(--border2)', borderRadius:'var(--radius-sm)', color:'var(--text)', fontFamily:'var(--font-mono)', fontSize:12, padding:'6px 10px', outline:'none', width:'100%' }}
-          onFocus={e=>e.target.style.borderColor='var(--accent)'}
-          onBlur={e=>e.target.style.borderColor='var(--border2)'}
-        />
+          onFocus={e=>e.target.style.borderColor='var(--accent)'} onBlur={e=>e.target.style.borderColor='var(--border2)'}/>
       </div>
     </div>
   )
 }
 
-// ════════════════════════════════════════════════════════
-// Constantes del formulario
-// ════════════════════════════════════════════════════════
 const POSITIONS = [
   { value:'BTN', label:'BTN — Button'        },
   { value:'CO',  label:'CO — Cutoff'          },
@@ -541,10 +430,9 @@ const EMPTY_FORM = {
   date:            new Date().toISOString().split('T')[0],
   position:        'BTN',
   result:          'win',
-  // Sin campo amount
   heroHand:        '',
-  villainPosition: '',         // posición del villano
-  villainRange:    [],         // array de keys del rango visual
+  villainPosition: '',
+  villainRange:    [],
   preflopAction:   '',
   street:          '',
   boardFlop:       [],
@@ -565,10 +453,17 @@ export default function Manos() {
   const [confirmId,  setConfirmId]  = useState(null)
   const [filter,     setFilter]     = useState('all')
   const [search,     setSearch]     = useState('')
+  const [sortBy,     setSortBy]     = useState('date')
   const [apiKeyOpen, setApiKeyOpen] = useState(false)
   const [formTab,    setFormTab]    = useState('basic')
 
+  // --- Paginación en memoria (Client-side) ---
   const hands = data.hands || []
+  const [pageLimit, setPageLimit] = useState(50)
+
+  const handleLoadMore = () => {
+    setPageLimit(prev => prev + 50)
+  }
 
   function serializeBoard(f) {
     const parts = []
@@ -581,46 +476,72 @@ export default function Manos() {
 
   function migrateHand(hand) {
     const out = { ...EMPTY_FORM, ...hand, tags: hand.tags||[] }
-    // Migrar villainRange de string a array vacío si viene de versión antigua
     if (typeof out.villainRange === 'string') out.villainRange = []
-    // Migrar board antiguo
     if (hand.board && !hand.boardFlop?.length && !hand.boardTurn && !hand.boardRiver) {
       out.notes = out.notes ? `${out.notes}\nBoard: ${hand.board}` : `Board: ${hand.board}`
     }
     return out
   }
 
-  const filtered = hands
-    .filter(h => filter==='all' || h.result===filter)
-    .filter(h => {
-      if (!search) return true
-      const q = search.toLowerCase()
-      return (h.notes||'').toLowerCase().includes(q)
-        || (h.position||'').toLowerCase().includes(q)
-        || (h.heroHand||'').toLowerCase().includes(q)
-        || (h.tags||[]).some(t=>t.toLowerCase().includes(q))
-    })
-    .sort((a,b) => new Date(b.date)-new Date(a.date))
+  // Filtrado y ordenación sobre las manos totales
+  const filtered = useMemo(() => {
+    const base = hands
+      .filter(h => filter==='all' || h.result===filter)
+      .filter(h => {
+        if (!search) return true
+        const q = search.toLowerCase()
+        return (h.notes||'').toLowerCase().includes(q)
+          || (h.position||'').toLowerCase().includes(q)
+          || (h.heroHand||'').toLowerCase().includes(q)
+          || (h.tags||[]).some(t=>t.toLowerCase().includes(q))
+      })
+
+    if (sortBy === 'strength-asc') {
+      return [...base].sort((a,b) => {
+        const sa = handStrength(a.heroHand), sb = handStrength(b.heroHand)
+        if (sa === sb) return new Date(b.date) - new Date(a.date)
+        return sa - sb
+      })
+    }
+    if (sortBy === 'strength-desc') {
+      return [...base].sort((a,b) => {
+        const sa = handStrength(a.heroHand), sb = handStrength(b.heroHand)
+        if (sa === sb) return new Date(b.date) - new Date(a.date)
+        return sb - sa
+      })
+    }
+    return [...base].sort((a,b) => new Date(b.date) - new Date(a.date))
+  }, [hands, filter, search, sortBy])
+
+  // Aplicar límite de página para renderizado eficiente
+  const paginatedHands = useMemo(() => {
+    return filtered.slice(0, pageLimit)
+  }, [filtered, pageLimit])
+
+  const hasMore = pageLimit < filtered.length
 
   function openNew() {
     setForm({ ...EMPTY_FORM, date:new Date().toISOString().split('T')[0] })
     setEditId(null); setFormTab('basic'); setModalOpen(true)
   }
-  function openEdit(hand) {
-    setForm(migrateHand(hand))
+  
+  function openEditFixed(hand) {
+    const migrated = migrateHand(hand)
+    if (hand.villainRangeKeys?.length) migrated.villainRange = hand.villainRangeKeys
+    setForm(migrated)
     setEditId(hand.id); setFormTab('basic'); setModalOpen(true)
   }
+
   function saveHand() {
     if (!form.date||!form.position) return
     const hs2save = {
       ...form,
-      board:        serializeBoard(form),
-      villainRange: Array.isArray(form.villainRange)
-        ? serializeRange(form.villainRange)  // guardar como string para la IA
-        : (form.villainRange || ''),
-      // Guardamos el array original en campo separado para restaurarlo al editar
+      board:          serializeBoard(form),
+      villainRange: Array.isArray(form.villainRange) ? serializeRange(form.villainRange) : (form.villainRange || ''),
       villainRangeKeys: Array.isArray(form.villainRange) ? form.villainRange : [],
     }
+    
+    // Guardamos en data.json (Estado global de React)
     setData(prev => {
       const hs = prev.hands||[]
       if (editId) return { ...prev, hands:hs.map(h=>h.id===editId?{...hs2save,id:editId}:h) }
@@ -628,28 +549,23 @@ export default function Manos() {
     })
     setModalOpen(false)
   }
+
   function deleteHand(id) {
     setData(prev=>({...prev,hands:prev.hands.filter(h=>h.id!==id)}))
     setConfirmId(null)
   }
+
   function saveAIResult(id, aiData) {
     setData(prev=>({...prev,hands:prev.hands.map(h=>h.id===id?{...h,...aiData}:h)}))
     setForm(f=>({...f,...aiData}))
   }
+
   function toggleTag(tag) {
     setForm(f=>({...f,tags:f.tags.includes(tag)?f.tags.filter(t=>t!==tag):[...f.tags,tag]}))
   }
+  
   const set = (k,v) => setForm(f=>({...f,[k]:v}))
   const currentHand = editId?(hands.find(h=>h.id===editId)||form):form
-
-  // Al abrir edición, restaurar los keys del rango visual
-  function openEditFixed(hand) {
-    const migrated = migrateHand(hand)
-    // Restaurar el array de keys desde villainRangeKeys si existe
-    if (hand.villainRangeKeys?.length) migrated.villainRange = hand.villainRangeKeys
-    setForm(migrated)
-    setEditId(hand.id); setFormTab('basic'); setModalOpen(true)
-  }
 
   const cols = ['Fecha','Pos','Hero','Villano','Board','Resultado','IA','']
 
@@ -657,10 +573,10 @@ export default function Manos() {
     <div style={{ display:'flex', flexDirection:'column', height:'100%', overflow:'hidden' }}>
       <PageHeader
         title="Manos"
-        subtitle={`${hands.length} manos · ${hands.filter(h=>h.heroHand).length} con rango · ${hands.filter(h=>h.aiAnalysis).length} analizadas`}
+        subtitle={`${hands.length || 0} manos registradas`}
         action={
           <div style={{ display:'flex', gap:8 }}>
-            <Button variant="secondary" size="sm" onClick={()=>setApiKeyOpen(true)}>🤖 API Key</Button>
+            <Button variant="secondary" size="sm" onClick={()=>setApiKeyOpen(true)}>🤖 Configuración IA</Button>
             <Button onClick={openNew}>+ Nueva mano</Button>
           </div>
         }
@@ -681,12 +597,28 @@ export default function Manos() {
           onFocus={e=>e.target.style.borderColor='var(--accent)'}
           onBlur={e=>e.target.style.borderColor='var(--border2)'}
         />
+        <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+          <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Orden</span>
+          {[
+            { id:'date',           label:'Fecha',   title:'Más reciente primero' },
+            { id:'strength-desc',  label:'↓ Mejor', title:'Mejor mano primero (AA → 22 → J2o)' },
+            { id:'strength-asc',   label:'↑ Peor',  title:'Peor mano primero (J2o → … → AA)' },
+          ].map(s => (
+            <button key={s.id} onClick={()=>setSortBy(s.id)} title={s.title} style={{
+              fontFamily:'var(--font-mono)', fontSize:11, padding:'4px 10px',
+              borderRadius:20, cursor:'pointer', transition:'all 0.15s',
+              background: sortBy===s.id ? 'rgba(74,222,128,0.12)' : 'var(--surface)',
+              border:`1px solid ${sortBy===s.id ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+              color: sortBy===s.id ? 'var(--accent)' : 'var(--text2)',
+            }}>{s.label}</button>
+          ))}
+        </div>
       </div>
 
       {/* Tabla */}
       <div style={{ flex:1, overflowY:'auto', padding:'12px 28px' }}>
-        {filtered.length===0
-          ? <Empty icon="🃏" message="No hay manos" sub="Añade tu primera mano con el botón superior"/>
+        {filtered.length===0 
+          ? <Empty icon="🃏" message="No hay manos visibles" sub="Intenta cambiar los filtros o añadir más manos."/>
           : (
             <table style={{ width:'100%', borderCollapse:'collapse' }}>
               <thead>
@@ -695,12 +627,12 @@ export default function Manos() {
                 ))}</tr>
               </thead>
               <tbody>
-                {filtered.map((hand,i)=>{
+                {paginatedHands.map((hand,i)=>{
                   const bd = serializeBoard(hand)
                   const vr = typeof hand.villainRange === 'string' ? hand.villainRange : serializeRange(hand.villainRangeKeys||[])
                   return (
                     <tr key={hand.id} onClick={()=>openEditFixed(hand)}
-                      style={{ borderBottom:i<filtered.length-1?'1px solid var(--border)':'none', cursor:'pointer', transition:'background 0.1s' }}
+                      style={{ borderBottom:i<paginatedHands.length-1?'1px solid var(--border)':'none', cursor:'pointer', transition:'background 0.1s' }}
                       onMouseEnter={e=>e.currentTarget.style.background='var(--surface)'}
                       onMouseLeave={e=>e.currentTarget.style.background='transparent'}
                     >
@@ -744,6 +676,15 @@ export default function Manos() {
             </table>
           )
         }
+
+        {/* ── BOTÓN CARGAR MÁS ── */}
+        {hands.length > 0 && hasMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: '24px', marginBottom: '24px' }}>
+            <Button variant="secondary" onClick={handleLoadMore}>
+              ↓ Cargar más manos
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
@@ -770,21 +711,14 @@ export default function Manos() {
           {/* ── Tab Básico ── */}
           {formTab==='basic' && (
             <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              {/* Fecha + Resultado en una fila */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 <Input label="Fecha" type="date" value={form.date} onChange={e=>set('date',e.target.value)}/>
                 <Select label="Resultado" value={form.result} onChange={e=>set('result',e.target.value)} options={RESULTS}/>
               </div>
-              {/* Posición hero + Posición villano */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
                 <Select label="Tu posición (hero)" value={form.position} onChange={e=>set('position',e.target.value)} options={POSITIONS}/>
-                <Select label="Posición del villano"
-                  value={form.villainPosition}
-                  onChange={e=>set('villainPosition',e.target.value)}
-                  options={[{value:'',label:'— Sin especificar —'}, ...POSITIONS]}
-                />
+                <Select label="Posición del villano" value={form.villainPosition} onChange={e=>set('villainPosition',e.target.value)} options={[{value:'',label:'— Sin especificar —'}, ...POSITIONS]}/>
               </div>
-              {/* Tags */}
               <div>
                 <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>Tags</div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
@@ -798,57 +732,26 @@ export default function Manos() {
                   ))}
                 </div>
               </div>
-              {/* Descripción */}
-              <Textarea label="Descripción de la mano" value={form.notes} onChange={e=>set('notes',e.target.value)} rows={4}
-                placeholder="Describe la situación: stack, acción calle a calle, reads… Cuanto más detalle, mejor análisis de IA."/>
+              <Textarea label="Descripción de la mano" value={form.notes} onChange={e=>set('notes',e.target.value)} rows={4} placeholder="Describe la situación: stack, acción calle a calle, reads… Cuanto más detalle, mejor análisis de IA."/>
             </div>
           )}
 
           {/* ── Tab Rangos & Board ── */}
           {formTab==='range' && (
             <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
-
-              {/* Hero hand */}
               <HeroHandInput value={form.heroHand} onChange={v=>set('heroHand',v)}/>
-
-              {/* Rango del villano — grid visual */}
-              <VillainRangePicker
-                selected={Array.isArray(form.villainRange) ? form.villainRange : []}
-                onChange={v=>set('villainRange',v)}
-              />
-
-              {/* Acción preflop + Calle decisiva */}
+              <VillainRangePicker selected={Array.isArray(form.villainRange) ? form.villainRange : []} onChange={v=>set('villainRange',v)} />
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }}>
-                <Select label="Acción preflop" value={form.preflopAction} onChange={e=>set('preflopAction',e.target.value)}
-                  options={[{value:'',label:'— Sin especificar —'},...PREFLOP_ACTIONS]}/>
-                <Select label="Calle decisiva" value={form.street} onChange={e=>set('street',e.target.value)}
-                  options={[{value:'',label:'— Sin especificar —'},...STREETS]}/>
+                <Select label="Acción preflop" value={form.preflopAction} onChange={e=>set('preflopAction',e.target.value)} options={[{value:'',label:'— Sin especificar —'},...PREFLOP_ACTIONS]}/>
+                <Select label="Calle decisiva" value={form.street} onChange={e=>set('street',e.target.value)} options={[{value:'',label:'— Sin especificar —'},...STREETS]}/>
               </div>
-
-              {/* Board por calles */}
               <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                 <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>Board</div>
                 <BoardPreview flop={form.boardFlop} turn={form.boardTurn} river={form.boardRiver}/>
-                <CardPicker label="Flop" max={3}
-                  selected={form.boardFlop||[]}
-                  onChange={v=>set('boardFlop',v)}
-                  blocked={[...(form.boardTurn?[form.boardTurn]:[]),...(form.boardRiver?[form.boardRiver]:[])]}
-                  accentColor="var(--accent)"
-                />
-                <CardPicker label="Turn" max={1}
-                  selected={form.boardTurn?[form.boardTurn]:[]}
-                  onChange={v=>set('boardTurn',v[0]||'')}
-                  blocked={[...(form.boardFlop||[]),...(form.boardRiver?[form.boardRiver]:[])]}
-                  accentColor="var(--amber)"
-                />
-                <CardPicker label="River" max={1}
-                  selected={form.boardRiver?[form.boardRiver]:[]}
-                  onChange={v=>set('boardRiver',v[0]||'')}
-                  blocked={[...(form.boardFlop||[]),...(form.boardTurn?[form.boardTurn]:[])]}
-                  accentColor="var(--red)"
-                />
+                <CardPicker label="Flop" max={3} selected={form.boardFlop||[]} onChange={v=>set('boardFlop',v)} blocked={[...(form.boardTurn?[form.boardTurn]:[]),...(form.boardRiver?[form.boardRiver]:[])]} accentColor="var(--accent)"/>
+                <CardPicker label="Turn" max={1} selected={form.boardTurn?[form.boardTurn]:[]} onChange={v=>set('boardTurn',v[0]||'')} blocked={[...(form.boardFlop||[]),...(form.boardRiver?[form.boardRiver]:[])]} accentColor="var(--amber)"/>
+                <CardPicker label="River" max={1} selected={form.boardRiver?[form.boardRiver]:[]} onChange={v=>set('boardRiver',v[0]||'')} blocked={[...(form.boardFlop||[]),...(form.boardTurn?[form.boardTurn]:[])]} accentColor="var(--red)"/>
               </div>
-
               <div style={{ background:'rgba(74,222,128,0.04)', border:'1px solid rgba(74,222,128,0.1)', borderRadius:7, padding:'10px 14px', fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)', lineHeight:1.6 }}>
                 💡 Las cartas se bloquean automáticamente entre calles. El rango del villano se serializa para el análisis de IA.
               </div>

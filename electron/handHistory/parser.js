@@ -7,20 +7,20 @@
  * Formatos de cabecera que soporta este parser:
  *
  * CASH GAME:
- *   PokerStars Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
+ * PokerStars Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
  *
  * TORNEO (el que usa este usuario):
- *   PokerStars Hand #260267741096: Tournament #3984919166, €4.50+€0.50 EUR Hold'em No Limit - Level I (25/50) - 2026/03/29 15:59:59 CET
+ * PokerStars Hand #260267741096: Tournament #3984919166, €4.50+€0.50 EUR Hold'em No Limit - Level I (25/50) - 2026/03/29 15:59:59 CET
  *
  * ZOOM:
- *   PokerStars Zoom Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
+ * PokerStars Zoom Hand #260267741096:  Hold'em No Limit ($0.01/$0.02 USD) - 2024/01/15 21:30:00 CET
  *
  * Diferencias del formato torneo vs cash:
- *   - "Tournament #ID," antes del tipo de juego
- *   - Buy-in: "€4.50+€0.50 EUR" (con símbolo de moneda, signo +, sin paréntesis)
- *   - Blinds: "Level I (25/50)" — los blinds están en paréntesis al final
- *   - Stacks: "(10000 in chips)" — SIN símbolo de moneda, CON espacio al final
- *   - Puede haber "is sitting out" o "out of hand" al final de líneas de seat
+ * - "Tournament #ID," antes del tipo de juego
+ * - Buy-in: "€4.50+€0.50 EUR" (con símbolo de moneda, signo +, sin paréntesis)
+ * - Blinds: "Level I (25/50)" — los blinds están en paréntesis al final
+ * - Stacks: "(10000 in chips)" — SIN símbolo de moneda, CON espacio al final
+ * - Puede haber "is sitting out" o "out of hand" al final de líneas de seat
  */
 
 // ── Normalización ──────────────────────────────────────────────────
@@ -29,9 +29,14 @@ function normalize(text) {
   return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
 
-// ── Identificador de cabecera de mano ─────────────────────────────
+// ── Constantes y Regex ────────────────────────────────────────────
 // Soporta Hand, Zoom Hand, y cualquier variante con Tournament
-const HAND_START_RE = /^PokerStars (?:Zoom )?Hand #\d+/m
+const HAND_START_RE    = /^PokerStars (?:Zoom )?Hand #\d+/m
+
+// Regex para Side Pots y Apuestas Devueltas
+const UNCALLED_BET_RE  = /Uncalled bet \([\$€£]?([\d.,]+)\) returned to (.+)/;
+const COLLECTED_POT_RE = /(.+) collected [\$€£]?([\d.,]+) from (?:side |main )?pot/;
+const ALL_IN_RE        = /(.+): (?:bets|raises|calls) [\$€£]?([\d.,]+) and is all-in/;
 
 /**
  * splitHands(rawText) → string[]
@@ -72,25 +77,18 @@ function parseHand(block) {
       : ''
 
     // ── Tipo de juego ────────────────────────────────────────────
-    // Cash:    "Hold'em No Limit ($0.01/$0.02 USD)"
-    // Torneo:  "€4.50+€0.50 EUR Hold'em No Limit - Level I (25/50)"
     const gameType = extractGameType(header)
 
     // ── Stakes ───────────────────────────────────────────────────
-    // Cash:    "$0.01/$0.02 USD"
-    // Torneo:  "€4.50+€0.50 EUR" + nivel "Level I (25/50)"
     const stakes = extractStakes(header, isTournament)
 
     // ── Blinds actuales ──────────────────────────────────────────
-    // Torneo: "Level I (25/50)" → 25/50
-    // Cash:   dentro del paréntesis principal
     const blinds = extractBlinds(header, isTournament)
 
     // ── Fecha ────────────────────────────────────────────────────
     const date = extractDate(header)
 
     // ── Tabla ────────────────────────────────────────────────────
-    // "Table '3984919166 10' 9-max Seat #1 is the button"
     const tableLine   = lines.find(l => l.startsWith("Table '")) || ''
     const tableM      = tableLine.match(/Table '([^']+)'\s+(\S+(?:-max)?)\s+Seat #(\d+) is the button/)
     const tableName   = tableM ? tableM[1] : ''
@@ -98,12 +96,6 @@ function parseHand(block) {
     const buttonSeat  = tableM ? parseInt(tableM[3]) : null
 
     // ── Jugadores y stacks ───────────────────────────────────────
-    // Formato torneo:  "Seat 1: babar59680 (10000 in chips) "  ← trailing space
-    // Formato cash:    "Seat 1: Hero ($200.00 in chips)"
-    // También puede:   "Seat 1: Hero (10000 in chips) is sitting out"
-    //
-    // Regex permisivo: acepta con o sin símbolo de moneda, con trailing space
-    // y con cualquier texto adicional después del paréntesis
     const players = {}
     const seatRe  = /^Seat (\d+): ([^\s(]+)\s*\([\$€£]?([\d,]+(?:\.\d+)?)\s*in chips\)/gm
     let seatM
@@ -116,7 +108,6 @@ function parseHand(block) {
     const totalPlayers = Object.keys(players).length
 
     // ── Héroe ────────────────────────────────────────────────────
-    // "Dealt to NombreHero [Ah Ks]"
     const dealtM    = text.match(/Dealt to ([^\s[]+)\s*\[([^\]]+)\]/)
     const heroName  = dealtM ? dealtM[1].trim() : null
     const heroCards = dealtM ? dealtM[2].trim() : null
@@ -137,11 +128,40 @@ function parseHand(block) {
     const board  = extractBoard(text)
     const street = detectDecisiveStreet(text)
 
-    // ── Resultado ────────────────────────────────────────────────
-    const { result, potWon } = detectResult(text, heroName)
-
-    // ── Bote y rake ──────────────────────────────────────────────
+    // ── Bote y rake inicial (SUMMARY) ────────────────────────────
     const potInfo = extractPotInfo(text)
+
+    // ── Resultado y Side Pots (NUEVA LÓGICA) ─────────────────────
+    let { result, potWon } = detectResult(text, heroName)
+    
+    let uncalledBet = 0;
+    let collectedPot = 0;
+
+    // Iteramos línea por línea para capturar botes múltiples y apuestas devueltas
+    for (const line of lines) {
+      if (UNCALLED_BET_RE.test(line)) {
+        const [, amountStr, player] = line.match(UNCALLED_BET_RE);
+        if (player.trim() === heroName) {
+          uncalledBet += parseFloat(amountStr.replace(/,/g, ''));
+        }
+      }
+
+      if (COLLECTED_POT_RE.test(line)) {
+        const [, player, amountStr] = line.match(COLLECTED_POT_RE);
+        if (player.trim() === heroName) {
+          collectedPot += parseFloat(amountStr.replace(/,/g, ''));
+        }
+      }
+    }
+
+    // Si encontramos sumas recogidas explícitamente (Side Pots/Main Pots)
+    if (collectedPot > 0) {
+      potWon = collectedPot;
+      result = 'win';
+    }
+
+    // Restamos lo que nunca entró al bote real (Uncalled bets)
+    potWon = Math.max(0, potWon - uncalledBet);
 
     // ── Tags ─────────────────────────────────────────────────────
     const tags = autoTags(text, heroName, preflopAction, result, isTournament)
@@ -196,16 +216,7 @@ function parseHand(block) {
 // HELPERS DE EXTRACCIÓN
 // ══════════════════════════════════════════════════════════════════
 
-/**
- * Extrae el tipo de juego de la cabecera.
- *
- * Cash:    "PokerStars Hand #ID:  Hold'em No Limit ($0.01/$0.02 USD) - DATE"
- * Torneo:  "PokerStars Hand #ID: Tournament #ID, €4.50+€0.50 EUR Hold'em No Limit - Level I (25/50) - DATE"
- *
- * Buscamos la primera aparición de los tipos de juego conocidos.
- */
 function extractGameType(header) {
-  // Orden de búsqueda: más específicos primero
   const types = [
     "Hold'em No Limit",
     "Hold'em Pot Limit",
@@ -221,36 +232,20 @@ function extractGameType(header) {
   for (const t of types) {
     if (header.includes(t)) return t
   }
-  return "Hold'em No Limit"  // fallback seguro
+  return "Hold'em No Limit" 
 }
 
-/**
- * Extrae los stakes.
- *
- * Cash:    "$0.01/$0.02 USD"   (dentro del primer paréntesis)
- * Torneo:  "€4.50+€0.50 EUR"  (antes del tipo de juego)
- */
 function extractStakes(header, isTournament) {
   if (isTournament) {
-    // "Tournament #ID, €4.50+€0.50 EUR Hold'em..."
-    // o sin símbolo: "Tournament #ID, 4.50+0.50 Hold'em..."
     const m = header.match(/Tournament #\d+,\s*([\$€£]?[\d.]+\+[\$€£]?[\d.]+(?:\s*\w+)?)/)
     return m ? m[1].trim() : ''
   }
-  // Cash: primer par de paréntesis con /
   const m = header.match(/\(([\$€£]?[\d,]+(?:\.\d+)?\/[\$€£]?[\d,]+(?:\.\d+)?(?:\s+\w+)?)\)/)
   return m ? m[1].trim() : ''
 }
 
-/**
- * Extrae los blinds actuales.
- *
- * Cash:    de los stakes "$0.01/$0.02" → "0.01/0.02"
- * Torneo:  "Level I (25/50)" → "25/50"
- */
 function extractBlinds(header, isTournament) {
   if (isTournament) {
-    // "Level I (25/50)" — el paréntesis justo antes del guion de fecha
     const m = header.match(/Level [IVXLCDM\d]+\s*\(([\d,]+\/[\d,]+)\)/)
     return m ? m[1] : ''
   }
@@ -258,18 +253,11 @@ function extractBlinds(header, isTournament) {
   return m ? m[1] : ''
 }
 
-/**
- * Extrae la fecha.
- * Busca el patrón "YYYY/MM/DD" en cualquier parte de la cabecera.
- */
 function extractDate(header) {
   const m = header.match(/(\d{4})\/(\d{2})\/(\d{2})/)
   return m ? `${m[1]}-${m[2]}-${m[3]}` : new Date().toISOString().split('T')[0]
 }
 
-/**
- * Convierte "Ah Ks" → "AKs", "Ah As" → "AA", "Td 9d" → "T9s"
- */
 function normalizeHoleCards(cards) {
   const parts = cards.trim().split(/\s+/)
   if (parts.length !== 2) return cards.replace(/\s+/g, '')
@@ -288,9 +276,6 @@ function normalizeHoleCards(cards) {
   return hi + lo + (s1 === s2 ? 's' : 'o')
 }
 
-/**
- * Calcula la posición del héroe en la mesa (BTN, SB, BB, UTG, HJ, CO).
- */
 function derivePosition(heroSeat, buttonSeat, players) {
   if (!heroSeat || !buttonSeat) return ''
 
@@ -301,7 +286,6 @@ function derivePosition(heroSeat, buttonSeat, players) {
 
   if (btnIdx === -1 || heroIdx === -1) return ''
 
-  // Distancia en sentido horario desde el botón (0 = BTN)
   const dist = (heroIdx - btnIdx + n) % n
 
   const maps = {
@@ -318,21 +302,15 @@ function derivePosition(heroSeat, buttonSeat, players) {
   return (maps[n] || maps[9])[dist] || ''
 }
 
-/**
- * Detecta la acción preflop del héroe: open | 3bet | 4bet | call | limp
- */
 function detectPreflopAction(text, heroName) {
   if (!heroName) return ''
 
-  // Sección preflop: desde *** HOLE CARDS *** hasta *** FLOP *** (o fin)
   const hcIdx    = text.indexOf('*** HOLE CARDS ***')
   const flopIdx  = text.indexOf('*** FLOP ***')
   const end      = flopIdx !== -1 ? flopIdx : text.length
   const preflop  = text.slice(hcIdx !== -1 ? hcIdx : 0, end)
 
   const esc = escRe(heroName)
-
-  // Contar raises del héroe en preflop
   const heroRaises = [...preflop.matchAll(new RegExp(`^${esc}: raises`, 'gm'))]
 
   if (heroRaises.length >= 2) return '4bet'
@@ -349,21 +327,14 @@ function detectPreflopAction(text, heroName) {
   return ''
 }
 
-/**
- * Extrae el board: "Ah Ks 7c · Td · 2h"
- */
 function extractBoard(text) {
   const parts = []
-
-  // Flop: "*** FLOP *** [Ah Ks 7c]"  o  "*** FLOP *** [Ah Ks 7c] [Td]" (run it twice)
   const flopM = text.match(/\*\*\* FLOP \*\*\*[^\[]*\[([^\]]+)\]/)
   if (flopM) parts.push(flopM[1].trim())
 
-  // Turn: segundo par de corchetes después de TURN
   const turnM = text.match(/\*\*\* TURN \*\*\*[^\[]*\[[^\]]+\]\s*\[([^\]]+)\]/)
   if (turnM) parts.push(turnM[1].trim())
 
-  // River: segundo par de corchetes después de RIVER
   const riverM = text.match(/\*\*\* RIVER \*\*\*[^\[]*\[[^\]]+\]\s*\[([^\]]+)\]/)
   if (riverM) parts.push(riverM[1].trim())
 
@@ -377,58 +348,28 @@ function detectDecisiveStreet(text) {
   return 'preflop'
 }
 
-/**
- * Detecta resultado del héroe (win / loss / even) y cuánto ganó.
- *
- * PokerStars usa:
- *   "[nombre] collected [X] from [main/side] pot"  — en el cuerpo
- *   "Seat N: [nombre] ... won ([X]) with ..."       — en el SUMMARY
- *   "Seat N: [nombre] collected ([X])"              — en el SUMMARY (torneo)
- */
 function detectResult(text, heroName) {
   if (!heroName) return { result: 'even', potWon: 0 }
-
   const esc = escRe(heroName)
 
-  // 1. "collected X from pot" (cash + torneo)
   const collRe = new RegExp(`\\b${esc}\\b collected ([\\$€£]?[\\d,]+(?:\\.\\d+)?)`)
   const collM  = text.match(collRe)
-  if (collM) {
-    return { result: 'win', potWon: parseFloat(collM[1].replace(/[€$£,]/g, '')) }
-  }
+  if (collM) return { result: 'win', potWon: parseFloat(collM[1].replace(/[€$£,]/g, '')) }
 
-  // 2. SUMMARY "won (X)"
   const wonRe = new RegExp(`\\b${esc}\\b[^\\n]* won \\([\\$€£]?([\\d,]+(?:\\.\\d+)?)\\)`)
   const wonM  = text.match(wonRe)
-  if (wonM) {
-    return { result: 'win', potWon: parseFloat(wonM[1].replace(/,/g, '')) }
-  }
+  if (wonM) return { result: 'win', potWon: parseFloat(wonM[1].replace(/,/g, '')) }
 
-  // 3. SUMMARY "collected (X)" — torneos
   const sumCollRe = new RegExp(`\\b${esc}\\b[^\\n]* collected \\([\\$€£]?([\\d,]+(?:\\.\\d+)?)\\)`)
   const sumCollM  = text.match(sumCollRe)
-  if (sumCollM) {
-    return { result: 'win', potWon: parseFloat(sumCollM[1].replace(/,/g, '')) }
-  }
+  if (sumCollM) return { result: 'win', potWon: parseFloat(sumCollM[1].replace(/,/g, '')) }
 
-  // 4. Foldó → pérdida
-  if (new RegExp(`^${esc}: folds`, 'm').test(text)) {
-    return { result: 'loss', potWon: 0 }
-  }
-
-  // 5. Llegó a showdown sin ganar → pérdida
-  if (/\*\*\* SHOW DOWN \*\*\*/.test(text)) {
-    return { result: 'loss', potWon: 0 }
-  }
+  if (new RegExp(`^${esc}: folds`, 'm').test(text)) return { result: 'loss', potWon: 0 }
+  if (/\*\*\* SHOW DOWN \*\*\*/.test(text)) return { result: 'loss', potWon: 0 }
 
   return { result: 'even', potWon: 0 }
 }
 
-/**
- * Extrae tamaño del bote y rake del SUMMARY.
- * Torneo: "Total pot 1300 | Rake 0"
- * Cash:   "Total pot $1.50 | Rake $0.07"
- */
 function extractPotInfo(text) {
   const m = text.match(/Total pot\s+[\$€£]?([\d,]+(?:\.\d+)?)(?:[^|\n]*\|\s*Rake\s+[\$€£]?([\d,]+(?:\.\d+)?))?/)
   return {
@@ -443,12 +384,17 @@ function autoTags(text, heroName, preflopAction, result, isTournament) {
 
   const esc = escRe(heroName)
 
-  if (/\*\*\* SHOW DOWN \*\*\*/.test(text))               tags.push('Showdown')
-  if (new RegExp(`\\b${esc}\\b[^\\n]* all-in`, 'm').test(text)) tags.push('All-in')
-  if (preflopAction === '3bet' || preflopAction === '4bet') tags.push('3-bet pot')
-  if (isTournament)                                        tags.push('Torneo')
+  if (/\*\*\* SHOW DOWN \*\*\*/.test(text)) tags.push('Showdown')
+  
+  // Tag: All-in (Usa la regex ampliada de la cabecera)
+  const heroAllInRe = new RegExp(`^${esc}: (?:bets|raises|calls) [\\$€£]?([\\d.,]+) and is all-in`, 'm');
+  if (heroAllInRe.test(text) || new RegExp(`\\b${esc}\\b[^\\n]* all-in`, 'm').test(text)) {
+    tags.push('All-in');
+  }
 
-  // Multiway en el flop
+  if (preflopAction === '3bet' || preflopAction === '4bet') tags.push('3-bet pot')
+  if (isTournament) tags.push('Torneo')
+
   const flopIdx = text.indexOf('*** FLOP ***')
   const turnIdx = text.indexOf('*** TURN ***')
   if (flopIdx !== -1) {
@@ -479,12 +425,10 @@ function buildAutoNotes({ heroName, heroCards, position, preflopAction,
   return parts.join(' | ')
 }
 
-// ── Helpers internos ──────────────────────────────────────────────
 function escRe(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-// ── Diagnóstico (para usar desde DevTools de Electron) ────────────
 function debugHand(rawText) {
   const text   = normalize(rawText)
   const blocks = splitHands(rawText)
@@ -494,7 +438,6 @@ function debugHand(rawText) {
   if (!blocks.length) {
     console.log('[parser debug] Primeros 300 chars:', JSON.stringify(text.slice(0, 300)))
     console.log('[parser debug] ¿Contiene cabecera?', HAND_START_RE.test(text))
-    // Buscar si hay cabecera con \r\n sin normalizar
     console.log('[parser debug] ¿Tiene \\r\\n?', rawText.includes('\r\n'))
     return { blocks: 0, rawSample: text.slice(0, 300) }
   }
@@ -504,5 +447,4 @@ function debugHand(rawText) {
   return { blocks: blocks.length, firstHand: first, rawBlock: blocks[0].slice(0, 500) }
 }
 
-// ── API pública ───────────────────────────────────────────────────
 module.exports = { splitHands, parseHand, extractHandId, debugHand, normalize }

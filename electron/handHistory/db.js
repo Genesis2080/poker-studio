@@ -396,6 +396,16 @@ function _parseJSON(str, fallback) {
   try { return JSON.parse(str) } catch { return fallback }
 }
 
+function getHandsPage(db, limit = 50, offset = 0) {
+  if (!db) return []
+  // Las ordenamos por fecha descendente (las más nuevas primero)
+  const rows = _all(db, 'SELECT * FROM imported_hands ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?', [limit, offset])
+  return rows.map(rowToHand)
+}
+
+// Recuerda añadir getHandsPage a los module.exports al final:
+// module.exports = { ..., getHandsPage }
+
 // ── Exportar ─────────────────────────────────────────────────────
 module.exports = {
   getDb, closeDb,

@@ -23,6 +23,14 @@ ipcMain.handle('data:load',     ()     => readData())
 ipcMain.handle('data:save',     (_, d) => { writeData(d); return true })
 ipcMain.handle('data:get-path', ()     => DATA_FILE)
 
+// Paginación directa desde SQLite
+ipcMain.handle('db:get-hands-page', async (_, limit, offset) => {
+  const { getDb, getHandsPage } = require('./db.js')
+  // Aseguramos que cargamos la instancia de la base de datos
+  const db = await getDb(DB_FILE)
+  return getHandsPage(db, limit, offset)
+})
+
 // ── Importer (singleton) ──────────────────────────────────────────
 let importer = null
 let mainWindow = null

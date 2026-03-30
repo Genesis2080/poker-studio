@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   loadData:    ()    => ipcRenderer.invoke('data:load'),
   saveData:    (d)   => ipcRenderer.invoke('data:save', d),
   getDataPath: ()    => ipcRenderer.invoke('data:get-path'),
-
+  
   // ── Importador de Hand History ───────────────────────────────────
 
   // Control del watcher
@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Sincronización: traer manos de SQLite → data.json
   hhSyncToApp:      (limit)  => ipcRenderer.invoke('hh:sync-to-app', limit),
+
+  // Paginación directa desde SQLite
+  dbGetHandsPage: (limit, offset) => ipcRenderer.invoke('db:get-hands-page', limit, offset),
 
   // ── Eventos push desde main.js → renderer ────────────────────────
   // Retornan una función de limpieza para usar en useEffect cleanup
