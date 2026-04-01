@@ -31,6 +31,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // Paginación directa desde SQLite
   dbGetHandsPage: (limit, offset) => ipcRenderer.invoke('db:get-hands-page', limit, offset),
+  dbGetHandRawText: (handId) => ipcRenderer.invoke('db:get-hand-raw-text', handId),
 
   // ── Eventos push desde main.js → renderer ────────────────────────
   // Retornan una función de limpieza para usar en useEffect cleanup
@@ -57,5 +58,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     const listener = (_, data) => cb(data)
     ipcRenderer.on('hh:error', listener)
     return () => ipcRenderer.removeListener('hh:error', listener)
+  },
+
+  // ── Replayer ──────────────────────────────────────────────────────
+  openReplayer: (hand) => ipcRenderer.invoke('replayer:open', hand),
+  closeReplayer: () => ipcRenderer.invoke('replayer:close'),
+  getTempHand: () => ipcRenderer.invoke('replayer:get-temp-hand'),
+  onReplayerLoadHand: (cb) => {
+    const listener = (_, data) => cb(data)
+    ipcRenderer.on('replayer:load-hand', listener)
+    return () => ipcRenderer.removeListener('replayer:load-hand', listener)
   },
 })

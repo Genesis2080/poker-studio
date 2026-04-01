@@ -544,7 +544,10 @@ export default function Manos() {
     // Guardamos en data.json (Estado global de React)
     setData(prev => {
       const hs = prev.hands||[]
-      if (editId) return { ...prev, hands:hs.map(h=>h.id===editId?{...hs2save,id:editId}:h) }
+      if (editId) {
+        const existingHand = hs.find(h=>h.id===editId)
+        return { ...prev, hands:hs.map(h=>h.id===editId?{...existingHand,...hs2save,id:editId}:h) }
+      }
       return { ...prev, hands:[{...hs2save,id:'h'+Date.now()},...hs] }
     })
     setModalOpen(false)
@@ -624,7 +627,9 @@ export default function Manos() {
               <thead>
                 <tr>{cols.map(h=>(
                   <th key={h} style={{ textAlign:'left', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.1em', padding:'0 8px 10px 0', borderBottom:'1px solid var(--border)' }}>{h}</th>
-                ))}</tr>
+                ))}
+                  <th style={{ textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.1em', padding:'0 8px 10px 0', borderBottom:'1px solid var(--border)' }}></th>
+                </tr>
               </thead>
               <tbody>
                 {paginatedHands.map((hand,i)=>{
@@ -661,6 +666,18 @@ export default function Manos() {
                           ? <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:hand.aiAnalysis.score>=7?'var(--accent)':hand.aiAnalysis.score>=5?'var(--amber)':'var(--red)' }}>{hand.aiAnalysis.score}/10</span>
                           : <span style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'var(--text3)' }}>—</span>
                         }
+                      </td>
+                      <td style={{ padding:'11px 0', textAlign:'center' }}>
+                        <button onClick={e=>{
+                          e.stopPropagation()
+                          localStorage.setItem('replayerHand', JSON.stringify(hand))
+                          window.electronAPI?.openReplayer(hand.id)
+                        }}
+                          title="Abrir en Replayer"
+                          style={{ background:'rgba(74,222,128,0.1)', border:'1px solid rgba(74,222,128,0.3)', borderRadius:5, color:'var(--accent)', padding:'3px 8px', fontSize:12, cursor:'pointer', transition:'all 0.15s' }}
+                          onMouseEnter={e=>{e.currentTarget.style.background='rgba(74,222,128,0.2)'}}
+                          onMouseLeave={e=>{e.currentTarget.style.background='rgba(74,222,128,0.1)'}}
+                        >▶</button>
                       </td>
                       <td style={{ padding:'11px 0', textAlign:'right' }}>
                         <button onClick={e=>{e.stopPropagation();setConfirmId(hand.id)}}

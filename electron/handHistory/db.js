@@ -389,6 +389,7 @@ function rowToHand(row) {
     tableFormat:     row.table_format    || '',
     gameType:        row.game_type       || '',
     source:          row.source          || 'pokerstars',
+    rawText:         row.raw_text        || '',
   }
 }
 
@@ -398,13 +399,15 @@ function _parseJSON(str, fallback) {
 
 function getHandsPage(db, limit = 50, offset = 0) {
   if (!db) return []
-  // Las ordenamos por fecha descendente (las más nuevas primero)
   const rows = _all(db, 'SELECT * FROM imported_hands ORDER BY date DESC, imported_at DESC LIMIT ? OFFSET ?', [limit, offset])
   return rows.map(rowToHand)
 }
 
-// Recuerda añadir getHandsPage a los module.exports al final:
-// module.exports = { ..., getHandsPage }
+function getHandRawText(db, handId) {
+  if (!db) return null
+  const row = _get(db, 'SELECT raw_text FROM imported_hands WHERE id = ?', [handId])
+  return row ? row.raw_text : null
+}
 
 // ── Exportar ─────────────────────────────────────────────────────
 module.exports = {
@@ -413,4 +416,6 @@ module.exports = {
   handExists, insertHands,
   getUnsynced, markSynced,
   getStats, getAllFileOffsets,
+  getHandsPage,
+  getHandRawText,
 }

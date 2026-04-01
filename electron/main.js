@@ -26,14 +26,21 @@ ipcMain.handle('data:get-path', ()     => DATA_FILE)
 // Paginación directa desde SQLite
 ipcMain.handle('db:get-hands-page', async (_, limit, offset) => {
   const { getDb, getHandsPage } = require('./db.js')
-  // Aseguramos que cargamos la instancia de la base de datos
   const db = await getDb(DB_FILE)
   return getHandsPage(db, limit, offset)
+})
+
+// Obtener rawText de una mano específica (para el replayer)
+ipcMain.handle('db:get-hand-raw-text', async (_, handId) => {
+  const { getDb, getHandRawText } = require('./handHistory/db.js')
+  const db = await getDb(DB_FILE)
+  return getHandRawText(db, handId)
 })
 
 // ── Importer (singleton) ──────────────────────────────────────────
 let importer = null
 let mainWindow = null
+let replayerWindow = null
 
 function getImporter() {
   if (!importer) {
@@ -59,7 +66,6 @@ function saveImporterConfig(cfg) {
 
 // ── Propagar eventos del importer al renderer ─────────────────────
 function attachImporterEvents(imp) {
-  // Nuevas manos importadas → push inmediato al renderer
   imp.on('handsImported', ({ hands, count, filePath, stats }) => {
     if (!mainWindow || mainWindow.isDestroyed()) return
     mainWindow.webContents.send('hh:hands-imported', {
@@ -96,14 +102,11 @@ function attachImporterEvents(imp) {
   })
 
   imp.on('parseError', ({ filePath, error }) => {
-    // Errores de parseo son frecuentes (manos corruptas, etc.) — solo log
     console.warn('[importer] Parse error en', path.basename(filePath), ':', error)
   })
 }
 
 // ── Canales IPC del importer ──────────────────────────────────────
-
-// Arrancar el watcher — async porque sql.js inicializa WASM de forma asíncrona
 ipcMain.handle('hh:start', async (_, hhFolder) => {
   const imp    = getImporter()
   const folder = hhFolder || loadImporterConfig().hhFolder || getDefaultHHPath()
@@ -121,7 +124,6 @@ ipcMain.handle('hh:start', async (_, hhFolder) => {
   }
 })
 
-// Detener el watcher
 ipcMain.handle('hh:stop', () => {
   if (importer) {
     importer.stop()
@@ -130,18 +132,15 @@ ipcMain.handle('hh:stop', () => {
   return { ok: true }
 })
 
-// Estadísticas y estado
 ipcMain.handle('hh:get-stats', () => {
   const imp = getImporter()
   return imp.getStats()
 })
 
-// Obtener la ruta por defecto de PokerStars según el OS
 ipcMain.handle('hh:get-default-path', () => {
   return { path: getDefaultHHPath() }
 })
 
-// Abrir diálogo para seleccionar carpeta HandHistory manualmente
 ipcMain.handle('hh:browse-folder', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title:      'Seleccionar carpeta HandHistory de PokerStars',
@@ -154,39 +153,31 @@ ipcMain.handle('hh:browse-folder', async () => {
   return { canceled: false, folder }
 })
 
-// Guardar configuración de la carpeta (sin arrancar el watcher)
 ipcMain.handle('hh:set-folder', (_, folder) => {
   saveImporterConfig({ ...loadImporterConfig(), hhFolder: folder })
   if (importer?.isRunning) importer.setFolder(folder)
   return { ok: true }
 })
 
-// Sincronizar manos importadas (de SQLite) hacia data.json
-// El renderer llama a esto para traer las manos de PokerStars al estado de la app
 ipcMain.handle('hh:sync-to-app', (_, limit = 200) => {
   const imp = getImporter()
   const newHands = imp.syncToApp(limit)
 
   if (!newHands.length) return { ok: true, added: 0 }
 
-  // Leer data.json, añadir las manos nuevas, guardar
   const appData = readData()
   const existingIds = new Set((appData.hands || []).map(h => h.id))
-
   const toAdd = newHands.filter(h => !existingIds.has(h.id))
 
   if (toAdd.length) {
     appData.hands = [...toAdd, ...(appData.hands || [])]
     writeData(appData)
-
-    // Marcar como sincronizadas en SQLite
     imp.confirmSync(toAdd.map(h => h.id))
   }
 
   return { ok: true, added: toAdd.length, total: newHands.length }
 })
 
-// Obtener la configuración guardada del importer
 ipcMain.handle('hh:get-config', () => {
   const cfg = loadImporterConfig()
   return {
@@ -195,7 +186,6 @@ ipcMain.handle('hh:get-config', () => {
   }
 })
 
-// Canal de diagnóstico: parsear un archivo manualmente y devolver resultado
 ipcMain.handle('hh:debug-file', async (_, filePath) => {
   try {
     const { splitHands, parseHand, debugHand } = require('./handHistory/parser')
@@ -247,14 +237,93 @@ function createWindow() {
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
-// ── Ciclo de vida de la app ────────────────────────────────────────
+// ── Ventana del Replayer ──────────────────────────────────────────
+const REPLAYER_TEMP_FILE = path.join(DATA_DIR, 'replayer_temp.json')
+
+function createReplayerWindow(hand) {
+  console.log('[Main] createReplayerWindow llamado con hand:', hand?.id)
+  console.log('[Main] DATA_DIR:', DATA_DIR)
+  console.log('[Main] REPLAYER_TEMP_FILE:', REPLAYER_TEMP_FILE)
+  // Guardar la mano en archivo temporal
+  ensureDir()
+  fs.writeFileSync(REPLAYER_TEMP_FILE, JSON.stringify(hand), 'utf8')
+  console.log('[Main] Archivo guardado en:', REPLAYER_TEMP_FILE)
+
+  if (replayerWindow && !replayerWindow.isDestroyed()) {
+    replayerWindow.focus()
+    replayerWindow.webContents.send('replayer:load-hand', hand)
+    return
+  }
+
+  replayerWindow = new BrowserWindow({
+    width:    1000,
+    height:   750,
+    minWidth: 800,
+    minHeight: 600,
+    backgroundColor: '#0d0f14',
+    titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    parent: mainWindow,
+    modal: false,
+    webPreferences: {
+      preload:          path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration:  false,
+    },
+  })
+
+  if (isDev) {
+    replayerWindow.loadURL('http://localhost:5173/#/replayer-window')
+  } else {
+    replayerWindow.loadFile(path.join(__dirname, '../dist/index.html'), { hash: '/replayer-window' })
+  }
+
+  replayerWindow.on('closed', () => { replayerWindow = null })
+}
+
+// ── IPC para abrir replayer ───────────────────────────────────────
+ipcMain.handle('replayer:open', (_, hand) => {
+  createReplayerWindow(hand)
+  return { ok: true }
+})
+
+// ── IPC para obtener mano del replayer ────────────────────────────
+ipcMain.handle('replayer:get-temp-hand', () => {
+  try {
+    console.log('[Main] getTempHand llamado')
+    if (fs.existsSync(REPLAYER_TEMP_FILE)) {
+      const data = JSON.parse(fs.readFileSync(REPLAYER_TEMP_FILE, 'utf8'))
+      if (data.read) {
+        console.log('[Main] Mano ya fue leída')
+        return null
+      }
+      // Marcar como leída
+      data.read = true
+      fs.writeFileSync(REPLAYER_TEMP_FILE, JSON.stringify(data), 'utf8')
+      console.log('[Main] Mano encontrada:', data.id, data.heroHand)
+      return data
+    } else {
+      console.log('[Main] Archivo no existe')
+    }
+  } catch (e) {
+    console.error('[Main] Error reading replayer temp file:', e)
+  }
+  return null
+})
+
+ipcMain.handle('replayer:close', () => {
+  if (replayerWindow && !replayerWindow.isDestroyed()) {
+    replayerWindow.close()
+  }
+  return { ok: true }
+})
+
+// ── Ciclo de vida de la app ──────────────────────────────────────
 app.whenReady().then(() => {
   createWindow()
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow() })
 })
 
 app.on('window-all-closed', () => {
-  // Detener el importer limpiamente antes de salir
   if (importer) { importer.stop(); importer = null }
   if (process.platform !== 'darwin') app.quit()
 })

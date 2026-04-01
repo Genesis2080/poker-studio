@@ -8,23 +8,17 @@ import Importar   from './pages/Importar.jsx'
 import StudyPlan  from './pages/StudyPlan.jsx'
 import { APIKeyModal } from './components/AIAnalysis.jsx'
 
-/* ── Contexto global de datos ───────────────────────────── */
 export const AppContext = createContext(null)
-
 export function useApp() { return useContext(AppContext) }
 
 const INITIAL_DATA = {
-  hands:         [],   // { id, date, position, result, amount, heroHand, villainRange, preflopAction, street, board, notes, tags, aiAnalysis, aiSuggest, aiErrors }
-  sessions:      [],   // { id, date, duration, buyIn, cashOut, notes, location }
-  flashcards:    {     // SM-2 state
-    cards: [],         // tarjetas personalizadas
-    sm2:   {},         // { [cardId]: { interval, repetitions, ef, dueDate, lastReview, history } }
-  },
-  historyReport: null, // informe cruzado de IA
-  studyPlan:     null, // plan de estudios con checkboxes
+  hands:         [],
+  sessions:      [],
+  flashcards:    { cards: [], sm2: {} },
+  historyReport: null,
+  studyPlan:     null,
 }
 
-/* ── Íconos SVG inline (sin dependencias) ─────────────── */
 const IconGrid = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
     <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
@@ -54,7 +48,6 @@ const IconBrain = () => (
     <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96-.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24A2.5 2.5 0 0 0 14.5 2"/>
   </svg>
 )
-
 const IconImport = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -62,21 +55,18 @@ const IconImport = () => (
     <line x1="12" y1="15" x2="12" y2="3"/>
   </svg>
 )
-
 const IconBook = () => (
   <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
     <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
     <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
   </svg>
 )
-
 const IconSpade = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
     <path d="M12 2C8 6 3 8 3 12a4 4 0 0 0 7 2.6C9.5 16 9 18 8 20h8c-1-2-1.5-4-2-5.4A4 4 0 0 0 21 12c0-4-5-6-9-10z"/>
   </svg>
 )
 
-/* ── Nav item ─────────────────────────────────────────── */
 function NavItem({ icon, label, active, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -99,18 +89,17 @@ function NavItem({ icon, label, active, onClick }) {
   )
 }
 
-/* ── Sidebar ──────────────────────────────────────────── */
 function Sidebar({ page, setPage, stats }) {
   const [apiKeyOpen, setApiKeyOpen] = useState(false)
 
   const navItems = [
     { id: 'dashboard',  icon: <IconGrid />,     label: 'Dashboard'   },
-    { id: 'manos',      icon: <IconCards />,    label: 'Manos'       },
-    { id: 'sesiones',   icon: <IconCalendar />, label: 'Sesiones'    },
-    { id: 'flashcards', icon: <IconFlash />,    label: 'Flashcards'  },
-    { id: 'studyplan',  icon: <IconBook />,    label: 'Plan estudios' },
-    { id: 'analisis',   icon: <IconBrain />,    label: 'Análisis IA' },
-    { id: 'importar',   icon: <IconImport />,   label: 'Importar'    },
+    { id: 'manos',     icon: <IconCards />,    label: 'Manos'       },
+    { id: 'sesiones',  icon: <IconCalendar />, label: 'Sesiones'    },
+    { id: 'flashcards',icon: <IconFlash />,    label: 'Flashcards'  },
+    { id: 'studyplan', icon: <IconBook />,     label: 'Plan estudios' },
+    { id: 'analisis',  icon: <IconBrain />,    label: 'Análisis IA' },
+    { id: 'importar',  icon: <IconImport />,  label: 'Importar'    },
   ]
 
   return (
@@ -121,12 +110,7 @@ function Sidebar({ page, setPage, stats }) {
       display: 'flex', flexDirection: 'column',
       height: '100%', overflow: 'hidden',
     }}>
-      {/* Logo */}
-      <div style={{
-        padding: '20px 16px 18px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: '10px',
-      }}>
+      <div style={{ padding: '20px 16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: '10px' }}>
         <span style={{ color: 'var(--accent)', display: 'flex' }}><IconSpade /></span>
         <div>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: '15px', color: 'var(--text)', lineHeight: 1.1 }}>
@@ -138,7 +122,6 @@ function Sidebar({ page, setPage, stats }) {
         </div>
       </div>
 
-      {/* Nav */}
       <nav style={{ flex: 1, padding: '12px 8px', overflowY: 'auto' }}>
         <div style={{ fontFamily: 'var(--font-mono)', fontSize: '10px', color: 'var(--text3)', letterSpacing: '0.12em', textTransform: 'uppercase', padding: '0 4px', marginBottom: '8px' }}>
           Menú
@@ -158,12 +141,7 @@ function Sidebar({ page, setPage, stats }) {
         />
       </nav>
 
-      {/* Footer stats */}
-      <div style={{
-        padding: '14px 16px',
-        borderTop: '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', gap: '8px',
-      }}>
+      <div style={{ padding: '14px 16px', borderTop: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <StatRow label="Manos registradas" value={stats.hands} />
         <StatRow label="Sesiones totales"  value={stats.sessions} />
         <StatRow
@@ -187,13 +165,21 @@ function StatRow({ label, value, valueColor = 'var(--text)' }) {
   )
 }
 
-/* ── App root ─────────────────────────────────────────── */
 export default function App() {
   const [page, setPage]   = useState('dashboard')
   const [data, setData]   = useState(INITIAL_DATA)
   const [ready, setReady] = useState(false)
+  const [isReplayerWindow, setIsReplayerWindow] = useState(false)
+  const [ReplayerComponent, setReplayerComponent] = useState(null)
 
-  // Carga inicial
+  useEffect(() => {
+    const hash = window.location.hash
+    setIsReplayerWindow(hash === '#/replayer-window')
+    if (hash === '#/replayer-window') {
+      import('./ReplayerWindow.jsx').then(m => setReplayerComponent(() => m.default))
+    }
+  }, [])
+
   useEffect(() => {
     async function load() {
       try {
@@ -220,13 +206,11 @@ export default function App() {
     load()
   }, [])
 
-  // Guardar cada vez que cambian los datos
   useEffect(() => {
     if (!ready) return
     if (window.electronAPI) window.electronAPI.saveData(data).catch(console.warn)
   }, [data, ready])
 
-  // Stats para sidebar
   const stats = {
     hands:     data.hands.length,
     sessions:  data.sessions.length,
@@ -248,6 +232,18 @@ export default function App() {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg)' }}>
         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text3)' }}>Cargando…</span>
+      </div>
+    )
+  }
+
+  if (isReplayerWindow && ReplayerComponent) {
+    return <ReplayerComponent />
+  }
+
+  if (isReplayerWindow && !ReplayerComponent) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#0d0f14', color: '#94a3b8', fontFamily: 'monospace' }}>
+        Cargando replayer...
       </div>
     )
   }
